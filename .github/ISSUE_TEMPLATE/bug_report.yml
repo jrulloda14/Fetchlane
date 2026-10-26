@@ -1,0 +1,55 @@
+name: Bug report
+description: Something isn't working as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting! Download bugs are easiest to fix with the kind of download, what the status said and the steps that led there. Please remove private tokens from any links you paste.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected and what you saw instead. Screenshots help.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Add a link to a 2 GB file
+        2. Pause at about 40%, close Fetchlane, open it again
+        3. Resume: ...
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Kind of download
+      options: [Direct (http/https), Torrent (magnet link), Torrent (.torrent file), Browser extension, Not download-specific]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Fetchlane version
+      description: Shown at the bottom of Settings.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows 11, Windows 10, Other]
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser (for extension problems)
+      placeholder: "e.g. Chrome 141, Edge 141"
+  - type: textarea
+    id: log
+    attributes:
+      label: Log excerpt
+      description: From %LOCALAPPDATA%\dev.fetchlane.desktop\logs\fetchlane.log. Links in it are already redacted.
+      render: text

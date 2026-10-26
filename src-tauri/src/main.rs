@@ -2,6 +2,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod external;
+mod integration;
+mod native_host;
+mod notify;
 
 use std::fs::{self, File};
 use std::path::Path;
@@ -9,11 +13,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use std::collections::HashSet;
-
-use fetchlane_engine::{Engine, EngineConfig, Snapshot};
-use tauri::{AppHandle, Emitter, Manager, RunEvent};
-use tauri_plugin_notification::NotificationExt;
+use fetchlane_engine::{Engine, EngineConfig};
+use tauri::{Emitter, Manager, RunEvent};
 use tokio::sync::broadcast::error::RecvError;
 
 pub struct AppState {
@@ -41,44 +42,40 @@ fn init_logging(log_dir: &Path) {
         .try_init();
 }
 
-/// Downloads that have finished (completed, or a torrent that is seeding).
-fn finished_ids(snap: &Snapshot) -> HashSet<String> {
-    snap.downloads
-        .iter()
-        .filter(|d| d.completed_at.is_some())
-        .map(|d| d.id.clone())
-        .collect()
-}
-
-/// Show a notification for each download that finished since `before`.
-fn notify_finished(app: &AppHandle, snap: &Snapshot, before: &HashSet<String>) {
-    for d in snap
-        .downloads
-        .iter()
-        .filter(|d| d.completed_at.is_some() && !before.contains(&d.id))
-    {
-        let _ = app
-            .notification()
-            .builder()
-            .title("Download finished")
-            .body(&d.file_name)
-            .show();
-    }
-}
-
 fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if native_host::is_native_launch(&args) {
+        native_host::run();
+        return;
+    }
+    let startup_adds = external::parse_args(&args);
+
     let app = tauri::Builder::default()
+        // First, so a second launch hands its arguments over and exits.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            let items = external::parse_args(argv.get(1..).unwrap_or_default());
+            notify::focus_main(app, None);
+            external::push(app, items);
+        }))
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
-        .setup(|app| {
+        .manage(external::Pending::default())
+        .setup(move |app| {
             let data_dir = app.path().app_data_dir()?;
             init_logging(
                 &app.path()
                     .app_log_dir()
                     .unwrap_or_else(|_| data_dir.clone()),
             );
+            notify::register(app.handle());
+            integration::register_all(
+                &app.path()
+                    .app_local_data_dir()
+                    .unwrap_or_else(|_| data_dir.clone()),
+            );
+            external::push(app.handle(), startup_adds.clone());
             let engine = tauri::async_runtime::block_on(Engine::open(
                 data_dir.join("state"),
                 EngineConfig::default(),
@@ -88,7 +85,7 @@ fn main() {
             let handle = app.handle().clone();
             let mut changes = engine.subscribe();
             let forward = engine.clone();
-            let mut finished = finished_ids(&engine.snapshot());
+            let mut finished = notify::finished_ids(&engine.snapshot());
             tauri::async_runtime::spawn(async move {
                 loop {
                     match changes.recv().await {
@@ -99,9 +96,9 @@ fn main() {
                     while changes.try_recv().is_ok() {}
                     let snap = forward.snapshot();
                     if forward.settings().notify_on_finish {
-                        notify_finished(&handle, &snap, &finished);
+                        notify::notify_finished(&handle, &snap, &finished);
                     }
-                    finished = finished_ids(&snap);
+                    finished = notify::finished_ids(&snap);
                     let _ = handle.emit("downloads-changed", snap);
                 }
             });
@@ -140,6 +137,10 @@ fn main() {
             commands::show_in_folder,
             commands::get_settings,
             commands::update_settings,
+            commands::integration_status,
+            commands::set_magnet_handler,
+            commands::show_extension_folder,
+            external::take_external_adds,
         ])
         .build(tauri::generate_context!())
         .expect("failed to start Fetchlane");

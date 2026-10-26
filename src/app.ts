@@ -8,7 +8,8 @@ import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
 import {
-  api, type DeleteScope, errorKind, errorMessage, type QueueMove, type Settings, type Snapshot, type TorrentDetails,
+  api, type DeleteScope, errorKind, errorMessage, type ExternalAdd, type IntegrationStatus, type QueueMove, type Settings,
+  type Snapshot, type TorrentDetails,
 } from "./api";
 import { driveOf, esc, fmtDur, fmtPair, fmtSize, fmtSpeed, plural, pct } from "./format";
 import { icon } from "./icons";
@@ -61,6 +62,9 @@ interface State {
   dragging: boolean;
   /** Magnet details being fetched in the Add download dialog. */
   probeId: string | null;
+  /** Links handed over from outside, waiting for Add download. */
+  incoming: ExternalAdd[];
+  integration: IntegrationStatus | null;
 }
 
 const S: State = {
@@ -91,6 +95,8 @@ const S: State = {
   trackersOpen: false,
   dragging: false,
   probeId: null,
+  incoming: [],
+  integration: null,
 };
 
 const HISTORY_SAMPLES = 900; // 15 minutes at one sample per second
@@ -175,7 +181,7 @@ function renderBody(resetScroll = false) {
       ? `<div class="fl-content"><div class="fl-empty">${icon("alert", 32, "fl-subtle")}<h2>Fetchlane couldn’t start</h2><p>${esc(S.loadError)}</p></div></div>`
       : `<div class="fl-content"><div class="fl-empty" role="status">${icon("spinner", 24, "fl-spin fl-subtle")}<p>Loading downloads…</p></div></div>`;
   } else if (S.view === "settings" && S.settings) {
-    main = `<div class="fl-content">${settingsHTML(S.settings, S.items.filter((d) => isFinished(d)).length, S.version)}</div>`;
+    main = `<div class="fl-content">${settingsHTML(S.settings, S.items.filter((d) => isFinished(d)).length, S.version, S.integration)}</div>`;
   } else {
     const list = currentList();
     const openItem = S.open ? S.byId.get(S.open) : undefined;
@@ -292,6 +298,7 @@ function renderLayer() {
   elLayer.innerHTML = h;
   placeMenu();
   restoreFocus(key);
+  if (!S.dialog && S.incoming.length) window.setTimeout(nextIncoming, 0);
   // A newly shown dialog takes focus: its safe choice, or its first field.
   if (S.dialog && !elLayer.querySelector(".fl-dialog")?.contains(document.activeElement)) {
     elLayer
@@ -692,6 +699,37 @@ async function openTorrentFile(path: string) {
   renderLayer();
 }
 
+function isTorrentLink(url: string): boolean {
+  try {
+    return /\.torrent$/i.test(new URL(url.trim()).pathname);
+  } catch {
+    return false;
+  }
+}
+
+async function openTorrentLink(dlg: Extract<Dialog, { type: "add" }>) {
+  const g = dlg.g;
+  const url = g.url.trim();
+  cancelFetch();
+  g.kind = "link";
+  g.fileLabel = decodeURIComponent(new URL(url).pathname.split("/").pop() || "the torrent file");
+  g.step = "reading";
+  g.preview = null;
+  renderLayer();
+  try {
+    const p = await api.probeTorrent({ type: "url", value: url }, newProbeId(), g.folder);
+    if (S.dialog !== dlg || g.url.trim() !== url) return;
+    g.preview = p;
+    g.selected = new Set(p.files.map((f) => f.index));
+    g.step = "preview";
+  } catch (e) {
+    if (S.dialog !== dlg || g.url.trim() !== url) return;
+    g.step = "error";
+    g.error = errorMessage(e);
+  }
+  renderLayer();
+}
+
 async function pickTorrentFile() {
   const picked = await openDialog({ multiple: false, filters: [{ name: "Torrent files", extensions: ["torrent"] }], title: "Open a .torrent file" });
   if (typeof picked === "string") await openTorrentFile(picked);
@@ -739,11 +777,14 @@ async function checkLink_() {
     renderLayer();
     return;
   }
+  if (isTorrentLink(g.url)) return openTorrentLink(dlg);
   g.step = "checking";
   renderLayer();
   try {
     const r = await api.probe(g.url.trim(), g.folder);
     if (seq !== checkSeq || S.dialog !== dlg) return;
+    // A link to a .torrent file opens the torrent instead of saving the file.
+    if (/bittorrent/i.test(r.contentType ?? "") || /\.torrent$/i.test(r.suggestedName)) return openTorrentLink(dlg);
     g.step = "valid";
     if (!dlg.nameEdited) g.name = r.suggestedName;
     g.nameClash = r.nameClash && !dlg.nameEdited;
@@ -769,6 +810,7 @@ async function browseAddFolder() {
   if (dlg.g.step === "valid" && !dlg.nameEdited) void checkLink_();
   // The name a torrent is saved as depends on the folder.
   if (dlg.g.kind === "file" && dlg.g.step === "preview") void openTorrentFile(dlg.g.url);
+  if (dlg.g.kind === "link" && dlg.g.step === "preview") void openTorrentLink(dlg);
 }
 
 async function submitAdd(queueFirst: boolean) {
@@ -997,6 +1039,16 @@ async function act(a: string, id: string | null, el: HTMLElement) {
     case "clearhist":
       S.dialog = { type: "clearhist" };
       return renderLayer();
+    case "extfolder":
+      return void run(api.showExtensionFolder());
+    case "magnet": {
+      const on = !S.integration?.magnetHandler;
+      void run(api.setMagnetHandler(on), on ? "Magnet links now open in Fetchlane" : "Fetchlane no longer opens magnet links").then((st) => {
+        if (st) S.integration = st;
+        renderBody();
+      });
+      return;
+    }
     case "doclearhist":
       S.dialog = null;
       renderLayer();
@@ -1181,6 +1233,7 @@ function onClick(e: MouseEvent) {
     S.query = "";
     renderBody(true);
     renderLayer();
+    if (S.view === "settings") void refreshIntegration();
     return;
   }
   if (t.dataset.density) return void updateSettings({ density: t.dataset.density as Settings["density"] });
@@ -1248,7 +1301,7 @@ function onInput(e: Event) {
     renderBody();
   } else if (t.hasAttribute("data-url") && S.dialog?.type === "add") {
     S.dialog.g.url = t.value;
-    if (S.dialog.g.kind === "file") S.dialog.g.kind = "direct";
+    if (S.dialog.g.kind === "file" || S.dialog.g.kind === "link") S.dialog.g.kind = "direct";
     window.clearTimeout(checkTimer);
     checkTimer = window.setTimeout(() => void checkLink_(), 350);
   } else if (t.hasAttribute("data-name") && S.dialog?.type === "add") {
@@ -1467,6 +1520,47 @@ function onPointerDown(e: PointerEvent) {
   if (g && e.button === 0) startDrag(g.dataset.grip!, e);
 }
 
+/* ---------------- links from the browser and Windows ---------------- */
+
+async function pullIncoming() {
+  const items = await api.takeExternalAdds().catch(() => [] as ExternalAdd[]);
+  for (const i of items) if (!S.incoming.some((x) => x.type === i.type && x.value === i.value)) S.incoming.push(i);
+  // One at a time: the next opens when this Add download closes.
+  if (!S.dialog) nextIncoming();
+  else if (items.length) toast(items.length === 1 ? "Another link is waiting · it opens after this one" : `${items.length} more links are waiting`);
+}
+
+function nextIncoming() {
+  if (S.dialog) return;
+  const i = S.incoming.shift();
+  if (!i) return;
+  if (S.view === "settings") S.view = "all";
+  if (i.type === "torrentFile") openAdd("", i.value);
+  else openAdd(i.value);
+}
+
+/** A notification was clicked: show that download. */
+function focusDownload(id: string) {
+  if (!S.byId.has(id)) return;
+  if (S.view === "settings" || !visible([S.byId.get(id)!], S.view, S.query).length) {
+    S.view = "all";
+    S.query = "";
+  }
+  S.sel = new Set([id]);
+  S.focus = id;
+  S.anchor = id;
+  S.open = id;
+  S.revealed = null;
+  render();
+  void pollTorrentDetails();
+  window.setTimeout(() => elBody.querySelector<HTMLElement>(`[data-row="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "nearest" }), 0);
+}
+
+async function refreshIntegration() {
+  S.integration = await api.integrationStatus().catch(() => null);
+  if (S.view === "settings") renderBody();
+}
+
 /* ---------------- drop a .torrent file ---------------- */
 
 function setDragging(on: boolean) {
@@ -1554,6 +1648,10 @@ export async function start(el: HTMLElement) {
     window.setInterval(() => void refreshFree(), 15_000);
     window.setInterval(() => void pollTorrentDetails(), 1500);
     void listenForDrops();
+    await api.onExternalAdd(() => void pullIncoming());
+    await api.onFocusDownload(focusDownload);
+    void pullIncoming();
+    void refreshIntegration();
   } catch (e) {
     S.loadError = errorMessage(e) || "The download engine didn’t respond.";
     if (errorKind(e) == null && !("__TAURI_INTERNALS__" in window))

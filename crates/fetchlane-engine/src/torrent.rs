@@ -27,7 +27,7 @@ use librqbit::api::TorrentIdOrHash;
 use librqbit::dht::DhtPersistenceConfig;
 use librqbit::{
     AddTorrent, AddTorrentOptions, AddTorrentResponse, DhtSessionConfig, ListenerOptions,
-    ManagedTorrent, Session, SessionOptions, TorrentStatsState,
+    ManagedTorrent, Session, SessionOptions, SessionPersistenceConfig, TorrentStatsState,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast, OnceCell};
@@ -43,7 +43,7 @@ use crate::{filename, store, Trasher};
 
 type Handle = Arc<ManagedTorrent>;
 
-const MAX_TORRENT_FILE_BYTES: u64 = 20 * 1024 * 1024;
+pub(crate) const MAX_TORRENT_FILE_BYTES: u64 = 20 * 1024 * 1024;
 const RECORDS_FILE: &str = "torrents.json";
 
 /// Networking knobs for torrents. Tests use loopback-only settings.
@@ -118,6 +118,8 @@ struct Runtime {
     last_progress_at: Option<Instant>,
     live_since: Option<Instant>,
     seed_tick: Option<Instant>,
+    /// The scheduler held it back because every torrent slot is taken.
+    waiting_for_slot: bool,
 }
 
 struct Entry {
@@ -296,6 +298,13 @@ impl Torrents {
             .get_or_try_init(|| async {
                 let cfg = &self.cfg;
                 let settings = self.settings();
+                let known: Vec<String> = lock(&self.st)
+                    .entries
+                    .iter()
+                    .map(|e| e.rec.info_hash.clone())
+                    .collect();
+                let resume = self.dir.join("resume");
+                prepare_resume_dir(&resume, &known);
                 let opts = SessionOptions {
                     dht: cfg.enable_dht.then(|| DhtSessionConfig {
                         persistence: Some(DhtPersistenceConfig {
@@ -314,6 +323,13 @@ impl Torrents {
                         download_bps: limit(settings.torrent_download_limit_kib),
                         upload_bps: limit(settings.torrent_upload_limit_kib),
                     },
+                    // Fast resume: librqbit keeps a bitfield of verified
+                    // pieces per torrent (keyed by info hash), so a restart
+                    // spot-checks the data instead of reading all of it.
+                    fastresume: true,
+                    persistence: Some(SessionPersistenceConfig::Json {
+                        folder: Some(resume),
+                    }),
                     client_name_and_version: Some(format!(
                         "Fetchlane {}",
                         env!("CARGO_PKG_VERSION")
@@ -387,6 +403,12 @@ impl Torrents {
                 (AddTorrent::from_url(m.to_string()), Some(m.to_string()))
             }
             TorrentSource::File(path) => (AddTorrent::from_bytes(read_torrent_file(path)?), None),
+            TorrentSource::Bytes(b) => (AddTorrent::from_bytes(b.clone()), None),
+            TorrentSource::Url(_) => {
+                return Err(DownloadError::internal(
+                    "Torrent links are downloaded first.",
+                ))
+            }
         };
         let session = self.session().await?;
         let opts = AddTorrentOptions {
@@ -951,6 +973,12 @@ impl Torrents {
                 } else {
                     false
                 };
+                let waiting = !want_run
+                    && !e.rec.paused
+                    && e.rec.error.is_none()
+                    && !errored
+                    && !(stats.finished && !initializing);
+                e.rt.waiting_for_slot = waiting;
                 if errored || initializing {
                     continue;
                 }
@@ -1047,8 +1075,11 @@ impl Torrents {
                         TorrentState::Stopped
                     } else if rec.paused {
                         TorrentState::Paused
-                    } else {
+                    } else if e.rt.waiting_for_slot {
                         TorrentState::Queued
+                    } else {
+                        // Checked and about to be started by the scheduler.
+                        TorrentState::Connecting
                     }
                 }
                 Some(TorrentStatsState::Live) => {
@@ -1711,6 +1742,32 @@ fn load_records(path: &Path) -> Vec<TorrentRecord> {
     }
 }
 
+/// Get librqbit's resume folder ready for a new session. Fetchlane keeps its
+/// own torrent list, so librqbit's session list is emptied (it would
+/// otherwise re-add torrents by itself); only the piece bitfields are kept,
+/// and those of torrents no longer in the list are removed.
+fn prepare_resume_dir(dir: &Path, known_hashes: &[String]) {
+    if let Err(e) = fs::create_dir_all(dir) {
+        tracing::warn!("couldn't create the torrent resume folder: {e}");
+        return;
+    }
+    if let Err(e) = store::write_atomic(&dir.join("session.json"), br#"{"torrents":{}}"#) {
+        tracing::warn!("couldn't reset the torrent resume list: {e}");
+    }
+    let Ok(read) = fs::read_dir(dir) else { return };
+    for entry in read.flatten() {
+        let path = entry.path();
+        let ext = path.extension().and_then(|e| e.to_str());
+        if !matches!(ext, Some("bitv" | "torrent" | "tmp")) {
+            continue;
+        }
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let stale = ext == Some("tmp") || !known_hashes.iter().any(|h| h == stem);
+        if stale {
+            let _ = fs::remove_file(&path);
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;

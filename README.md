@@ -1,247 +1,90 @@
-<img src="assets/fetchlane/logos/fetchlane-mark-light.svg" width="64" alt="Fetchlane mark">
+# <img src="assets/fetchlane/logos/fetchlane-mark-light.svg" width="44" align="top" alt=""> Fetchlane: An Open-Source Download Manager for Windows
 
-# Fetchlane
+> Your downloads, in order. Direct downloads and BitTorrent in one calm list, with files that arrive intact even after dropped connections, pauses, crashes and misbehaving servers.
 
-**Your downloads, in order.**
+[![Download](https://img.shields.io/badge/Download-v0.1.0-0d7f75)](https://github.com/jrulloda14/Fetchlane/releases/latest)
+[![License](https://img.shields.io/badge/License-MIT-e8b923)](LICENSE)
+[![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)](docs/INSTALL.md#windows-10-and-11)
+[![Windows CI](https://github.com/jrulloda14/Fetchlane/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/jrulloda14/Fetchlane/actions/workflows/windows-ci.yml)
+![BitTorrent](https://img.shields.io/badge/BitTorrent-magnet%20%C2%B7%20.torrent-3cc7b8)
+[![Browser extension](https://img.shields.io/badge/Extension-Chrome%20%C2%B7%20Edge%20%C2%B7%20Brave-4285F4?logo=googlechrome&logoColor=white)](docs/INSTALL.md#browser-extension-chrome-edge-brave)
+![Privacy](https://img.shields.io/badge/No-account%20%C2%B7%20no%20tracking-2ea44f)
+[![Tauri](https://img.shields.io/badge/Built%20with-Tauri%202-24C8DB?logo=tauri&logoColor=white)](https://tauri.app)
+[![Rust](https://img.shields.io/badge/Rust-stable-B7410E?logo=rust&logoColor=white)](https://www.rust-lang.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![User guide](https://img.shields.io/badge/Docs-User%20guide-5b5bd6)](docs/USER_GUIDE.md)
 
-An open-source desktop download manager focused on one thing above all else: **files that
-arrive intact**, even after dropped connections, pauses, crashes, and misbehaving servers.
-It handles direct HTTP/HTTPS downloads and BitTorrent (magnet links and .torrent files) in
-one list.
+**Fetchlane** is a free, open-source desktop download manager. Paste a link, a magnet link or a .torrent file, or send downloads from your browser, and Fetchlane keeps them in order: queued, resumed safely, retried when the connection drops, and never overwriting a file you already have.
 
-Built with Rust and [Tauri 2](https://tauri.app). It is MIT-licensed, written from scratch,
-and not affiliated with any commercial download manager.
+**Welcome to the v0.1.0 preview!** Windows 10 and 11 are ready to try. Feedback shapes what comes next.
 
-> **Status:** Working MVP for Windows: download engine, desktop app, and installer.
+<p align="center"><img src="docs/assets/fetchlane-downloads.png" width="760" alt="Fetchlane: direct downloads and torrents in one list, with progress, speeds, retries and seeding"></p>
 
-## Features
+## What it does
 
-**App**
+- **Download anything in one list.** Direct http/https links and BitTorrent (magnet links and .torrent files) side by side, each with a quiet Direct or Torrent tag, live progress, speed and time left.
+- **Resume safely.** Fetchlane only continues a partial file when the server proves it's the same file. If it can't, it says so and keeps your data until you decide. Crashes and restarts pick up from the last confirmed byte.
+- **Ride out bad connections.** Automatic retries with a visible countdown ("Retrying in 8 s · 2 of 5"), optional multi-connection downloads, and plain-language errors that say what to do next.
+- **Keep a queue.** Choose how many downloads run at once, reorder by dragging, **Start now** to skip the line, or **Pause all**.
+- **Torrents done right.** See a torrent's contents before downloading and pick the files you want. Fetching magnet details can be cancelled, stalled torrents say they're waiting for peers, progress is saved between runs, and seeding stops at the ratio or time you set.
+- **Send downloads from your browser.** The extension for Chrome, Edge and Brave hands your downloads to Fetchlane, and **Download with Fetchlane** sits on the right-click menu. You always confirm the folder in Fetchlane.
+- **Know when it's done.** A notification from Fetchlane with the name, size and folder, plus **Open** and **Show in folder** buttons.
+- **Delete only on purpose.** **Stop seeding**, **Remove from list** and **Delete downloaded files** are separate actions, and deleting shows exactly which files go to the Recycle Bin.
 
-- A desktop window built from the Fetchlane design system: sidebar lists (All, Active,
-  Queued, Seeding, Completed, Failed), a toolbar, one download table for direct downloads
-  and torrents with live progress, a details panel, and a status bar with download and
-  upload speeds
-- Add download: paste a link anywhere with Ctrl+V. Fetchlane checks the name and size,
-  warns about name clashes, shows free space, and offers **Download** (first in line) or
-  **Add to queue**.
-- A notification when a download finishes (can be turned off in Settings)
-- Per-download actions, an overflow and right-click menu, multi-select with a selection
-  toolbar, drag-to-reorder in the queue, and full keyboard control (arrow keys, Space,
-  Enter, Delete, Ctrl+N/F/I/A, Alt+↑/↓, Shift+F10)
-- Confirmations that state what will be lost (cancel, restart, remove), with the safe
-  choice focused
-- Settings that apply immediately: folder, simultaneous downloads, connections, retries,
-  theme (System/Light/Dark), density, history, and torrent limits
-- Responsive layout down to 960 × 640: the sidebar stays expanded, and the speed and
-  time-left columns fold into the status cell
+**Private by design:** no account, no sign-up and no telemetry. Fetchlane only connects to the servers and peers of the downloads you add.
 
-**Engine**
+## Download
 
-- HTTP and HTTPS downloads with streaming I/O and bounded memory (256 KiB write buffers)
-- Pause, resume, cancel, retry, restart, and remove, with no pause/cancel races and never
-  more than one worker per download. Pause is refused when it would lose progress.
-- A queue with a configurable number of simultaneous downloads (1–10, default 4):
-  - Queue positions, Move to top / up / down, and first-in-line or last-in-line adding
-  - "Start now", which bypasses the limit
-  - "Pause all", which holds the queue until "Resume all"
-- Automatic retries with a visible countdown and attempt count ("2 of 5"), "Retry now", and
-  a setting to configure or turn them off
-- Safe resume: only with an `If-Range` validator and an exact `Content-Range` match. If the
-  server can't continue a partial download, the download stops as **Can't resume** and
-  keeps its data until you choose to restart it. It is never silently started over.
-- Remove from list keeps files by default. It can optionally send completed files to the
-  Recycle Bin.
-- Links are shown without credentials or query parameters. The full link is available only
-  through an explicit reveal or "Copy link".
-- Persisted settings for theme (System/Light/Dark), density, retries, and history
-- Detection of resources that changed on the server (ETag/Last-Modified) and of servers
-  that ignore or break range requests
-- Optional segmented downloads (1–8 connections) for servers with verified range support.
-  More connections help on some servers and make no difference on others.
-- Recovery after closing or crashing: saved progress counts only bytes that were fsync'd,
-  and unconfirmed data is discarded on startup
-- Redirects (up to 10; HTTPS→HTTP downgrades are refused), timeouts, and retries with
-  bounded exponential backoff and jitter
-- Safe file names: `Content-Disposition` support (including RFC 5987), protection against
-  path traversal, Windows reserved names, and collision-free naming that never overwrites
-  an existing file
-- Clear, user-facing error messages, for example "There isn't enough free disk space" or
-  "The file wasn't found on the server (HTTP 404)"
-- TLS certificates verified through the OS trust store. Credentials and query strings are
-  never logged or shown.
+Get the latest version from the **[Releases page](https://github.com/jrulloda14/Fetchlane/releases/latest)**.
 
-**Torrents**
+| Platform | File | Notes |
+| --- | --- | --- |
+| Windows 10 / 11 (64-bit) | `Fetchlane_<version>_x64-setup.exe` | Installs for your user account; no admin rights needed. Includes the browser extension. |
 
-- Add a magnet link (paste it like any link), or a .torrent file with **Open .torrent
-  file…** or by dropping it on the window
-- Magnet links show **Fetching torrent details** (cancellable) and then the contents. With
-  **Start automatically after fetching details** (off by default) the torrent starts as soon
-  as its details arrive, with all files selected.
-- A contents preview before anything is downloaded: file selection with sizes, the total
-  selected, and the destination. Files can be selected or skipped later in the details panel.
-- States: Fetching details, Queued, Checking files, Connecting, Downloading, Stalled
-  (waiting for peers), Paused, Seeding, Complete (stopped), and Error with a recovery action
-- Details panel: files and selection, peers, downloaded and uploaded totals, ratio, seeding
-  status and limits, trackers (collapsible), and **Recheck files**
-- **Stop seeding**, **Remove from list** (keeps files), and **Delete downloaded files**
-  (sends only this torrent's own files to the Recycle Bin, after a confirmation that shows
-  how many files, how much data, and which folder) are separate actions
-- Settings: download and upload speed limits, active torrent limit (default 3), and
-  automatic seeding limits by ratio (default 1.0) and by time
-- Files are verified piece by piece, and a new torrent never writes into an existing file
-  or folder: it gets a unique name, like direct downloads. File names are checked for
-  path traversal and Windows reserved names.
-- Uses [librqbit](https://github.com/ikatson/rqbit) (Apache-2.0) with DHT, trackers, and
-  local peer discovery
+Fetchlane isn't code-signed yet, so Windows will show a warning the first time you open it. The **[installation guide](docs/INSTALL.md)** walks through it step by step, including the browser extension.
 
-## Prerequisites (Windows)
+## Using Fetchlane
 
-- Rust 1.90 or newer (`rustup`, MSVC toolchain)
-- Visual Studio 2022 Build Tools with "Desktop development with C++"
-- Microsoft Edge WebView2 Runtime (preinstalled on Windows 10/11)
-- Node.js 20 or newer
+1. **Add a download.** Click **Add download** (<kbd>Ctrl</kbd>+<kbd>N</kbd>) or just press <kbd>Ctrl</kbd>+<kbd>V</kbd> with a link on the clipboard. Fetchlane checks the name and size first.
+2. **Add a torrent.** Paste a magnet link, choose **Open .torrent file…**, or drop a .torrent file on the window. Pick the files you want and the folder, then **Download**.
+3. **Let it run.** Pause, resume, reorder or start downloads right away from the row, its menu or the keyboard. Open **Details** (<kbd>Enter</kbd>) for peers, share ratio, files and **Recheck files**.
+4. **Connect your browser.** In **Settings → Browser**, choose **Show extension folder** and load it in Chrome, Edge or Brave.
 
-On macOS and Linux, install the [Tauri prerequisites](https://tauri.app/start/prerequisites/)
-for your platform. The engine is portable, but only Windows has been tested.
+<p align="center"><img src="docs/assets/fetchlane-add-torrent.png" width="760" alt="Add download showing a torrent's files, sizes and destination before anything is downloaded"></p>
 
-## Development
+The **[user guide](docs/USER_GUIDE.md)** covers statuses, torrents and seeding, the browser extension, notifications, settings and every keyboard shortcut.
+
+## Build from source
+
+Requires Node.js 24, npm 11 and stable Rust (1.90 or newer), plus the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/) for Windows.
 
 ```bash
-npm install                 # once
-npm run tauri dev           # run the app with hot reload
+npm ci
+npm run desktop:dev      # run the desktop app in development
+npm run desktop:build    # build the installer
+npm test                 # UI tests
+cargo test --workspace   # engine, torrent and app tests
 ```
 
-Checks:
+See [CONTRIBUTING.md](CONTRIBUTING.md) for project conventions, [docs/BUILD_AND_RELEASE.md](docs/BUILD_AND_RELEASE.md) for packaging, and [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it works inside.
 
-```bash
-cargo test --workspace                                 # engine: unit + integration tests
-cargo clippy --workspace --all-targets -- -D warnings
-npm test                                               # UI logic tests (Vitest)
-npm run typecheck
-```
+## Project status
 
-**UI preview without the backend.** `npm run dev` on its own serves the UI at
-`http://localhost:1420`. When it's opened in a normal browser, Fetchlane installs Tauri's IPC
-mocks with sample downloads (`src/dev/preview.ts`), so the interface can be reviewed and
-styled without Rust. The preview code is excluded from production builds.
+Fetchlane is an early preview (v0.x). Windows is the tested platform. Known limitations and what has been verified live on the [project status page](docs/PROJECT_STATUS.md), changes in the [changelog](CHANGELOG.md), and what's next on the [roadmap](ROADMAP.md).
 
-## Building an installer
+Built with [Tauri 2](https://tauri.app), Rust and TypeScript. Torrents use [librqbit](https://github.com/ikatson/rqbit). Fetchlane is written from scratch and isn't affiliated with any commercial download manager.
 
-```bash
-npm run tauri build
-```
-
-This produces a per-user installer (no admin rights needed) at
-`target/release/bundle/nsis/Fetchlane_<version>_x64-setup.exe`. The app itself is
-`target/release/fetchlane.exe`.
-
-## Architecture
-
-```
-crates/fetchlane-engine/       Download engine: pure Rust, no UI dependency
-  src/engine.rs            Download list, queue scheduler, commands, lifecycle, recovery
-  src/torrent.rs           Torrents: librqbit session, probes, states, seeding limits, deletion
-  src/worker.rs            One download: requests, range validation, segments, checkpoints, finalize
-  src/http.rs              Client setup (TLS, redirect policy), header parsing
-  src/filename.rs          Name extraction, sanitization, collision-free naming
-  src/store.rs             Atomic JSON persistence
-  src/error.rs             Error classification and user-facing messages
-  tests/                   Integration tests and a deterministic misbehaving HTTP server
-src-tauri/                 Desktop shell: wires the engine to Tauri commands and events
-src/                       UI (TypeScript, no framework)
-  app.ts                   State, rendering, live updates, actions, keyboard, menus
-  views.ts                 HTML builders following the design system's class contract
-  model.ts                 Maps engine data to design-system states, lists and groups
-  api.ts, format.ts        Typed commands; size/speed/time formatting
-  dev/preview.ts           Browser preview with sample data (development only)
-docs/IPC.md                Command and event contract between the UI and the backend
-assets/fetchlane/          Brand and design system: logos, line icons, tokens, component specs
-```
-
-**Design system.** `assets/fetchlane/design-system/README.md` is the brand book and the
-interaction spec. It covers voice, colour tokens, status states, layout, and keyboard
-behaviour. `tokens.json` is the source of truth for tokens, `components/bundle.css` is the
-`fl-` class contract, and `components/bundle.js` is a reference renderer that serves as the
-behaviour spec. The app icon in `src-tauri/icons/` is generated from
-`assets/fetchlane/logos/fetchlane-mark-light.svg` with
-`npx @tauri-apps/cli icon assets/fetchlane/logos/fetchlane-mark-light.svg`, run from `src-tauri`.
-
-**UI.** The UI uses the design system's `tokens.css` and `bundle.css` directly and ports the
-reference renderer's markup to TypeScript. The window is drawn with a custom title bar. It
-re-renders a list only when a download's state changes; speeds, sizes, progress bars and
-countdowns are updated in place, so hover and keyboard focus are never disturbed. Remote
-file names and hosts are always HTML-escaped. The web view can't open files or links by
-path: it asks the backend by download ID.
-
-**Data flow.** The UI calls commands (`add_download`, `pause_download`, and so on). The engine
-updates its state and schedules workers. Workers stream to `<name>.<id>.fetchlane-part` in the
-destination folder. The engine broadcasts changes, and the shell forwards them as a
-`downloads-changed` event.
-
-**Correctness model.**
-
-1. Each download has at most one worker. A new worker can start only after the previous one
-   has exited, and every segment writer is joined first. Stop requests (pause < shutdown <
-   cancel < remove) merge, so the strongest one wins.
-2. Progress is recorded only after flush and `fsync`. Saved state is written atomically
-   (temp file, fsync, rename). Metadata that invalidates existing data, such as a restart
-   or new validators, is saved *before* any new bytes are written.
-3. On startup, a single-stream partial file is truncated to its last checkpoint. A segmented
-   partial file must match the expected size, or the download restarts.
-4. Resume sends `Range` plus `If-Range` (a strong ETag or Last-Modified) and requires the
-   `Content-Range` start, end, and total to match exactly, along with unchanged validators.
-   - A `200` reply replaces the partial data from byte 0.
-   - Inconsistent ranges switch that download to a single connection without ranges.
-   - A changed resource restarts from zero, at most 3 times in a row.
-5. Finalizing claims the final name atomically (`create_new`, numbering on collision), then
-   renames the partial file over that placeholder. Existing user files are never overwritten.
-
-**Where data lives.**
-
-- Download list and settings: `%APPDATA%\dev.fetchlane.desktop\state\`
-- Torrent list and saved .torrent metadata: `state	orrents.json` and `state	orrents\`
-- Log: `%LOCALAPPDATA%\dev.fetchlane.desktop\logs\fetchlane.log` (rotated at 5 MB)
-
-## Known limitations
-
-- Fonts: the design calls for Segoe UI Variable and Cascadia Mono. On Windows 10 these fall
-  back to Segoe UI and Consolas.
-- The window is tested on Windows only. macOS and Linux builds should work but are unverified.
-- Responses that have neither `Content-Length` nor chunked encoding end when the connection
-  closes, so a truncated transfer can't be told apart from a complete one.
-- Downloads of unknown size, and resources without an ETag or Last-Modified header, can't be
-  resumed safely. If they are interrupted, they need a restart from zero, and they can't be
-  paused once data has arrived.
-- "Change folder" for a failed download isn't supported yet. Remove the download and add it
-  again in the new folder.
-- With "Keep history" off, completed downloads stay in the list until Fetchlane restarts.
-- `Last-Modified` has one-second granularity. A file changed twice within a second and
-  served with no ETag could go undetected.
-- Segments are split statically, with no work stealing, so one slow connection can delay
-  completion.
-- Lowering the simultaneous-download limit doesn't pause downloads that are already running.
-- Fetchlane asks for uncompressed bytes (`Accept-Encoding: identity`). If a server compresses
-  anyway, the file is saved exactly as sent.
-- The download list stores full URLs, including any tokens, in plain JSON in your user
-  profile. Logs and the UI show redacted URLs only.
-- The system proxy is used, but there is no UI for proxy authentication.
-- The free-space check before downloading is best-effort.
-- Torrents:
-  - The details panel shows connected and known peers. librqbit doesn't report seeds
-    separately, so seeds aren't counted on their own.
-  - Progress isn't saved between runs. On startup each torrent checks its files again
-    before continuing, which takes a moment for large torrents.
-  - The first time a torrent starts, Windows Firewall may ask whether Fetchlane can accept
-    incoming connections. Torrents still work if you decline, with fewer peers.
-  - DHT is always on. There is no setting for encryption, port forwarding (UPnP), or a
-    proxy for peer connections.
-  - Torrents can't be reordered by dragging. The active torrent limit starts them in list order.
-- Deferred until after the MVP: browser integration, scheduling, media extraction, and
-  automatic updates.
+| Document | What's in it |
+| --- | --- |
+| [Installation guide](docs/INSTALL.md) | Installing, first launch, the browser extension, updating and uninstalling |
+| [User guide](docs/USER_GUIDE.md) | Adding downloads, statuses, torrents, browser, notifications, settings, shortcuts |
+| [Architecture](docs/ARCHITECTURE.md) | Code layout, correctness model, torrents, notifications, where data lives |
+| [IPC contract](docs/IPC.md) | Commands and events between the UI and the backend, native messaging |
+| [Testing](docs/TESTING.md) | Test suites and manual release checks |
+| [Build and release](docs/BUILD_AND_RELEASE.md) | Prerequisites, checks, installer, releasing |
+| [Design system](assets/fetchlane/design-system/README.md) | Brand, tokens, states, layout and interaction rules |
+| [Security policy](SECURITY.md) | What Fetchlane can touch, and how to report a vulnerability |
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Third-party crates and npm packages are listed in
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The Fetchlane mark, icons, and
-design system in `assets/fetchlane/` belong to the Fetchlane project.
+[MIT](LICENSE) © 2026 Fetchlane contributors. Third-party notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The Fetchlane mark, icons and design system in `assets/fetchlane/` belong to the Fetchlane project.

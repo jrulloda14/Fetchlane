@@ -334,6 +334,11 @@ pub struct TorrentPreview {
 pub enum TorrentSource {
     Magnet(String),
     File(PathBuf),
+    /// An http(s) link to a .torrent file; Fetchlane downloads it first.
+    Url(String),
+    /// The contents of a .torrent file (internal: a downloaded `Url`).
+    #[serde(skip)]
+    Bytes(bytes::Bytes),
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]

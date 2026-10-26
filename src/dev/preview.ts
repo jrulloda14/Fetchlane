@@ -430,7 +430,15 @@ function handle(cmd: string, a: Record<string, unknown>): unknown {
     case "open_file":
     case "show_in_folder":
     case "copy_source_url":
+    case "show_extension_folder":
       return null;
+    case "take_external_adds":
+      return [];
+    case "integration_status":
+      return integration;
+    case "set_magnet_handler":
+      integration.magnetHandler = !!a.enabled;
+      return integration;
     case "plugin:app|version":
       return "0.1.0-preview";
     case "plugin:clipboard-manager|read_text":
@@ -446,6 +454,13 @@ function handle(cmd: string, a: Record<string, unknown>): unknown {
   setTimeout(changed);
   return null;
 }
+
+const integration = {
+  browserHost: true,
+  magnetHandler: false,
+  magnetUserChoice: null as string | null,
+  extensionDir: "C:\\Users\\you\\AppData\\Local\\Fetchlane\\browser-extension",
+};
 
 export function installPreview() {
   (window as unknown as { __FL_PREVIEW__: boolean }).__FL_PREVIEW__ = true;

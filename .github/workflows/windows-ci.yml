@@ -1,0 +1,50 @@
+name: Windows CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: windows-ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test-and-build:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      CARGO_TERM_COLOR: never
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '24.15.0'
+      - name: Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal --component rustfmt,clippy
+          rustup override set 1.99.0
+      - run: npm ci
+      - name: Typecheck, UI bundle and UI tests
+        run: |
+          npm run build
+          npm test
+      - name: Rust format, lints and tests
+        shell: bash
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+      - name: Build Windows installer (unsigned development build)
+        run: npm run desktop:build
+      - name: Keep installer for 14 days (not a release)
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: Fetchlane-windows-x64-development
+          retention-days: 14
+          if-no-files-found: error
+          path: target/release/bundle/nsis/*-setup.exe

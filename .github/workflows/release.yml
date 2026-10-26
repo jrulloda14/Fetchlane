@@ -1,0 +1,100 @@
+name: Release (draft)
+# Pushing a tag such as v0.1.0 builds the Windows installer and attaches it,
+# with SHA256SUMS.txt, to a DRAFT release. Publishing stays a manual step on
+# GitHub. Builds are unsigned until signing credentials are configured.
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+env:
+  TAG: ${{ github.ref_name }}
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Tag must match the app version everywhere
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs = require("fs"), tag = process.env.TAG.replace(/^v/, "");
+            const versions = {
+              "package.json": JSON.parse(fs.readFileSync("package.json", "utf8")).version,
+              "tauri.conf.json": JSON.parse(fs.readFileSync("src-tauri/tauri.conf.json", "utf8")).version,
+              "Cargo.toml": /^version = "([^"]+)"/m.exec(fs.readFileSync("Cargo.toml", "utf8"))[1],
+              "browser-extension/manifest.json": JSON.parse(fs.readFileSync("browser-extension/manifest.json", "utf8")).version,
+            };
+            for (const [file, v] of Object.entries(versions)) if (v !== tag) { console.error(`${file} has ${v}, tag is ${tag}`); process.exit(1); }'
+      - name: Create draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          sed -e "s/{{VERSION}}/$VERSION/g" -e "s#{{REPO}}#$GITHUB_REPOSITORY#g" -e "s/{{TAG}}/$TAG/g" .github/release-notes.md > notes.md
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "Fetchlane $VERSION" --notes-file notes.md
+
+  windows:
+    needs: draft
+    runs-on: windows-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        with:
+          node-version: '24.15.0'
+      - name: Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.99.0 --profile minimal
+          rustup override set 1.99.0
+      - run: npm ci
+      - name: Tests
+        shell: bash
+        run: |
+          npm run build
+          npm test
+          cargo test --workspace --locked
+      - name: Build installer
+        run: npm run desktop:build
+      - name: Attach installer to the draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          out="Fetchlane_${TAG#v}_x64-setup.exe"
+          cp target/release/bundle/nsis/*-setup.exe "$out"
+          gh release upload "$TAG" "$out" --repo "$GITHUB_REPOSITORY" --clobber
+
+  checksums:
+    needs: [windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish SHA256SUMS.txt to the draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern 'Fetchlane_*' --dir assets
+          (cd assets && sha256sum Fetchlane_* > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          gh release upload "$TAG" assets/SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber

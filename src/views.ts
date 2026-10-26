@@ -1,7 +1,7 @@
 // HTML builders for every component. Markup and classes follow the design
 // system's class contract (assets/fetchlane/design-system/components/bundle.css).
 // Every value that comes from a server or the user goes through esc().
-import type { DeleteScope, Settings, TorrentDetails, TorrentPreview } from "./api";
+import type { DeleteScope, IntegrationStatus, Settings, TorrentDetails, TorrentPreview } from "./api";
 import {
   driveOf, esc, fmtDur, fmtPair, fmtSize, fmtSpeed, hostOf, pct, plural, when, whenLong,
 } from "./format";
@@ -871,7 +871,7 @@ export function statusbarHTML(o: {
 
 /* ---------------- settings ---------------- */
 
-export function settingsHTML(s: Settings, completed: number, version: string): string {
+export function settingsHTML(s: Settings, completed: number, version: string, integ: IntegrationStatus | null = null): string {
   const tog = (k: keyof Settings, on: boolean, lbl: string, disabled = false) =>
     `<button class="fl-toggle" role="switch" aria-checked="${on}" data-set="${k}" aria-label="${lbl}"${disabled ? " disabled" : ""}></button><span style="width:28px;font-size:13px">${on ? "On" : "Off"}</span>`;
   const radio = (k: keyof Settings, v: string, t: string) =>
@@ -897,8 +897,9 @@ export function settingsHTML(s: Settings, completed: number, version: string): s
     row(null, "Connections per download", "Some servers send large files faster over several connections. Fetchlane only uses them when the server supports it; it doesn’t always help.",
       numbox("connectionsPerDownload", s.connectionsPerDownload, 1, 8, "Connections per download")) +
     row(null, "Continue unfinished downloads when Fetchlane starts", "Downloads interrupted by closing Fetchlane pick up where they stopped.", tog("autoResume", s.autoResume, "Continue unfinished downloads when Fetchlane starts")) +
-    row("info", "Notify when a download finishes", "Shows a Windows notification with the file name.", tog("notifyOnFinish", s.notifyOnFinish, "Notify when a download finishes")) +
+    row("info", "Notify when a download finishes", "Shows a Windows notification with the name, size and folder, and buttons to open the file or its folder.", tog("notifyOnFinish", s.notifyOnFinish, "Notify when a download finishes")) +
     "</div></section>" +
+    browserSection(integ, row) +
     '<section class="fl-sgroup"><h2>Retries</h2><div class="fl-scard">' +
     row("retry", "Retry automatically when a connection drops", "Fetchlane waits a little longer before each attempt and keeps the partial file.", tog("retryAutomatically", s.retryAutomatically, "Retry automatically")) +
     row(null, "Attempts before giving up", "Waits 5 s, 15 s, 45 s, then 2 min between attempts. After the last one, the download moves to Failed.",
@@ -934,6 +935,30 @@ export function settingsHTML(s: Settings, completed: number, version: string): s
     "</div></section>" +
     `<p class="fl-note" style="margin:0">Fetchlane ${esc(version)} · Open source · HTTP, HTTPS and BitTorrent downloads</p>` +
     "</div></div>"
+  );
+}
+
+type SettingsRow = (ic: string | null, title: string, sub: string, ctl: string, extra?: string) => string;
+
+function browserSection(integ: IntegrationStatus | null, row: SettingsRow): string {
+  if (!integ) return "";
+  const ready = integ.browserHost;
+  const magnetSub = integ.magnetUserChoice
+    ? `Windows is set to open magnet links with another app (${esc(integ.magnetUserChoice)}). To use Fetchlane, choose it for MAGNET in Windows Settings › Apps › Default apps.`
+    : "Clicking a magnet link in any browser opens it in Add download. Your browser may ask once before opening Fetchlane.";
+  return (
+    '<section class="fl-sgroup"><h2>Browser</h2><div class="fl-scard">' +
+    row("globe", "Browser extension",
+      ready
+        ? "Fetchlane is ready for its extension in Chrome, Edge and Brave. Downloads you start in the browser open here in Add download, so you choose the folder and confirm."
+        : "Fetchlane couldn’t register itself for the browser extension. Restart Fetchlane, and check that it isn’t blocked by security software.",
+      `<button class="fl-btn" data-a="extfolder"${integ.extensionDir ? "" : " disabled"}>${icon("folderOpen", 16)}Show extension folder</button>`) +
+    row(null, "How to add the extension",
+      "Open your browser’s extensions page (chrome://extensions or edge://extensions), turn on Developer mode, choose <b>Load unpacked</b> and select the extension folder. Then pin Fetchlane to the toolbar to turn catching downloads on or off.",
+      "") +
+    row("link", "Open magnet links with Fetchlane", magnetSub,
+      `<button class="fl-toggle" role="switch" aria-checked="${integ.magnetHandler}" data-a="magnet" aria-label="Open magnet links with Fetchlane"></button><span style="width:28px;font-size:13px">${integ.magnetHandler ? "On" : "Off"}</span>`) +
+    "</div></section>"
   );
 }
 
@@ -1007,7 +1032,8 @@ export interface AddState {
   free: number | null;
   ask: boolean;
   /** What the input turned out to be. */
-  kind: "direct" | "magnet" | "file";
+  /** `link`: an http(s) link to a .torrent file. */
+  kind: "direct" | "magnet" | "file" | "link";
   /** Name of a picked or dropped .torrent file. */
   fileLabel: string;
   preview: TorrentPreview | null;

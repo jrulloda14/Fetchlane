@@ -40,13 +40,17 @@ unless the table says otherwise; check `kind`.
 | `get_source_url` | `{ id }` | The full link, including credentials and parameters. Use it for the reveal (eye) toggle. |
 | `copy_source_url` | `{ id }` | **Copy link**: puts the full link on the clipboard from the backend. |
 | `free_space` | `{ path }` | Free bytes on that drive, or `null`. Used for the "free space" text in Add download and the status bar. |
-| `probe_torrent` | `{ source: TorrentSource, probeId, destDir? }` | `TorrentPreview`. Reads a .torrent file at once; a magnet link fetches details from peers ("Fetching torrent details"). Choose a fresh `probeId` per attempt. |
+| `probe_torrent` | `{ source: TorrentSource, probeId, destDir? }` | `TorrentPreview`. Reads a .torrent file at once (or downloads it first for a `url` source); a magnet link fetches details from peers ("Fetching torrent details"). Choose a fresh `probeId` per attempt. |
 | `cancel_torrent_probe` | `{ probeId }` | Cancels a magnet fetch; the pending `probe_torrent` rejects with "Fetching torrent details was cancelled." |
 | `add_torrent` | `{ request: AddTorrentRequest }` | `DownloadView`. Pass `probeId` from a preview, with `selected` file indexes. Or pass `magnet` alone for **Start automatically after fetching details**: the entry appears as `fetching` and starts with all files. |
 | `recheck_torrent` | `{ id }` | **Recheck files**: verifies every piece on disk and downloads what's missing or damaged. |
 | `set_torrent_files` | `{ id, selected: number[] }` | Changes which files are downloaded. At least one file. Skipped files that are already on disk are kept. |
 | `torrent_details` | `{ id }` | `TorrentDetails`, for the details panel. Poll it while the panel is open. |
 | `delete_scope` | `{ id }` | `DeleteScope`: what **Delete downloaded files** would send to the Recycle Bin. Works for both kinds. |
+| `take_external_adds` | none | `ExternalAdd[]`: links and .torrent files handed over from outside (command line, second launch, browser extension), oldest first. Call at startup and on each `external-add` event; open Add download for one at a time. |
+| `integration_status` | none | `IntegrationStatus`, for Settings › Browser. |
+| `set_magnet_handler` | `{ enabled }` | `IntegrationStatus`. Registers or removes Fetchlane as the handler for magnet links (current user). Only removes the handler if it is Fetchlane's. |
+| `show_extension_folder` | none | Opens the bundled browser extension folder, for "Load unpacked". |
 | `get_settings` | none | `Settings` |
 | `update_settings` | `{ settings: Settings }` | `Settings`, clamped. Settings apply immediately, with no Save button. Also sets the native title-bar theme. |
 
@@ -63,7 +67,14 @@ a second while downloads are active (at most about 10 times a second). Call `lis
 once at startup, then render from this event.
 
 When a download or torrent finishes and `notifyOnFinish` is on, the backend shows a Windows
-notification ("Download finished" and the name). The UI doesn't need to do anything.
+notification from Fetchlane's own identity (name, size, folder, **Open** and **Show in
+folder**; three or more at once are summed up). The UI doesn't need to do anything.
+
+`focus-download`: payload is a download ID. A notification was clicked; select that
+download and open its details.
+
+`external-add`: no payload. Something was handed over from outside; call
+`take_external_adds`.
 
 ## Types
 
@@ -134,7 +145,19 @@ interface TorrentSummary {
   infoHash: string;
 }
 
-type TorrentSource = { type: "magnet"; value: string } | { type: "file"; value: string };
+type TorrentSource =
+  | { type: "magnet"; value: string }
+  | { type: "file"; value: string }
+  | { type: "url"; value: string }; // http(s) link to a .torrent file (20 MB at most)
+
+type ExternalAdd = { type: "link"; value: string } | { type: "torrentFile"; value: string };
+
+interface IntegrationStatus {
+  browserHost: boolean;             // native messaging host registered
+  magnetHandler: boolean;           // magnet links registered to Fetchlane
+  magnetUserChoice: string | null;  // another app chosen in Windows settings wins over it
+  extensionDir: string | null;      // bundled extension folder
+}
 
 interface TorrentPreview {
   probeId: string;
@@ -235,3 +258,17 @@ Never-retried errors: `notFound`, `accessDenied`, `diskFull`, `destination`, `pe
 
 For the Restart confirmation, use `downloaded` for the amount it discards ("deletes the
 412 MB already downloaded").
+
+## Outside the window
+
+- **Command line.** `fetchlane.exe --add <link>`, a bare http(s) or magnet link, or an
+  absolute path to a .torrent file. Only one Fetchlane runs: a second launch hands its
+  arguments to the running window (`external-add`) and exits.
+- **Browser extension.** Chromium browsers start `fetchlane.exe chrome-extension://<id>/`
+  as the native messaging host `dev.fetchlane.host` (manifest written to
+  `%LOCALAPPDATA%\dev.fetchlane.desktop\native-host\`, registered under HKCU for Chrome,
+  Edge, Brave and Chromium). Messages are a 32-bit little-endian length plus JSON:
+  `{"type":"ping"}` → `{"ok":true,"version":"…"}`; `{"type":"add","url":"…"}` → launches
+  `fetchlane.exe --add <url>` and answers `{"ok":true}`, or `{"ok":false,"error":"…"}`
+  for anything but http, https and magnet links. Only the extension ID
+  `loeipedomkbakhnhoannlanfnfnimdni` may connect.

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Fetchlane</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icons/icon-32.png" width="20" height="20" alt="">
+    <h1>Fetchlane</h1>
+    <span id="status" class="status" role="status">Checking…</span>
+  </header>
+
+  <p id="problem" class="problem" role="alert" hidden></p>
+
+  <section>
+    <label class="row">
+      <span class="text"><b>Catch browser downloads</b><span>Downloads you start open in Fetchlane’s Add download.</span></span>
+      <input type="checkbox" id="catch" role="switch">
+    </label>
+    <label class="row" id="siteRow" hidden>
+      <span class="text"><b>On <span id="site"></span></b><span>Turn off for sites that need you to be signed in.</span></span>
+      <input type="checkbox" id="siteCatch" role="switch">
+    </label>
+    <label class="row">
+      <span class="text"><b>Skip small files</b><span>Smaller files stay in the browser. 0 catches everything.</span></span>
+      <span class="num"><input type="number" id="minSize" min="0" max="10000" step="1" inputmode="numeric" aria-label="Skip files smaller than, in megabytes"> MB</span>
+    </label>
+  </section>
+
+  <p class="note">Right-click a link and choose <b>Download with Fetchlane</b> to send one link, including magnet links. Fetchlane can’t use your browser’s sign-in, so a download that needs it may fail there.</p>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

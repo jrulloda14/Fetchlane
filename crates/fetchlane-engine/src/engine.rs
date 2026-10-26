@@ -21,7 +21,7 @@ use crate::model::{
 use crate::redact::{display_url, host_of, query_param_count, redact_url};
 use crate::speed::SpeedMeter;
 use crate::store::Store;
-use crate::torrent::Torrents;
+use crate::torrent::{Torrents, MAX_TORRENT_FILE_BYTES};
 use crate::worker::RunOptions;
 use crate::{filename, http, worker, EngineConfig};
 
@@ -1013,6 +1013,44 @@ impl Engine {
 
     /// Read a .torrent file or fetch a magnet link's details, for the
     /// contents preview. Cancel with [`Engine::cancel_torrent_probe`].
+    /// Download a .torrent file from a link (at most 20 MB).
+    async fn fetch_torrent_file(&self, raw_url: &str) -> Result<bytes::Bytes, DownloadError> {
+        let url = http::parse_url(raw_url)?;
+        let fetch = async {
+            let mut resp = self
+                .inner
+                .client
+                .get(url)
+                .send()
+                .await
+                .map_err(|e| DownloadError::from_reqwest(&e))?;
+            let status = resp.status().as_u16();
+            if !(200..300).contains(&status) {
+                return Err(DownloadError::from_status(status, None));
+            }
+            let too_large =
+                || DownloadError::invalid("That link is too large to be a torrent file.");
+            if http::content_length(resp.headers()).is_some_and(|n| n > MAX_TORRENT_FILE_BYTES) {
+                return Err(too_large());
+            }
+            let mut body = Vec::new();
+            while let Some(chunk) = resp
+                .chunk()
+                .await
+                .map_err(|e| DownloadError::from_reqwest(&e))?
+            {
+                body.extend_from_slice(&chunk);
+                if body.len() as u64 > MAX_TORRENT_FILE_BYTES {
+                    return Err(too_large());
+                }
+            }
+            Ok(bytes::Bytes::from(body))
+        };
+        tokio::time::timeout(self.inner.cfg.response_timeout * 4, fetch)
+            .await
+            .map_err(|_| DownloadError::timeout())?
+    }
+
     pub async fn probe_torrent(
         &self,
         source: TorrentSource,
@@ -1022,6 +1060,10 @@ impl Engine {
         let dir = dest_dir
             .map(Path::to_path_buf)
             .unwrap_or_else(|| self.settings().download_dir);
+        let source = match source {
+            TorrentSource::Url(url) => TorrentSource::Bytes(self.fetch_torrent_file(&url).await?),
+            other => other,
+        };
         self.inner
             .torrents
             .probe(source, probe_id.to_string(), &dir)

@@ -363,6 +363,13 @@ async fn restart_restores_from_disk_without_peers() {
         .await;
         engine.shutdown().await;
     }
+    // Verified pieces are saved for fast resume; leftovers of torrents that
+    // are no longer in the list are cleaned up on the next start.
+    let resume = env.state_dir.join("torrents").join("resume");
+    let bitv = resume.join(format!("{}.bitv", s.info_hash));
+    assert!(bitv.exists(), "no saved progress at {bitv:?}");
+    let stale = resume.join(format!("{}.bitv", "ab".repeat(20)));
+    std::fs::write(&stale, b"old").unwrap();
     drop(s.session); // no peers any more
     let engine = open(&env, vec![], |_| {}).await;
     let v = wait_t(&engine, &id, 30, "restored seeding", |v| {
@@ -371,6 +378,12 @@ async fn restart_restores_from_disk_without_peers() {
     .await;
     assert_eq!(v.downloaded, body.len() as u64);
     assert_eq!(read(env.downloads.join("keep.bin")), body);
+    assert!(bitv.exists());
+    assert!(!stale.exists(), "stale resume data was kept");
+
+    // Removing the torrent also drops its saved progress.
+    engine.remove(&id, false).await.unwrap();
+    assert!(!bitv.exists());
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -570,6 +583,65 @@ async fn active_torrent_limit_queues_the_rest() {
         state(v) == TorrentState::Seeding
     })
     .await;
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn torrent_link_is_downloaded_and_previewed() {
+    let body = pattern(300_000, 21);
+    let s = seeder("linked.bin", &[("", body.clone())]).await;
+    let server = TestServer::start().await;
+    server.file(
+        "/files/linked.torrent",
+        Resource::new(s.torrent_bytes.clone()),
+    );
+    server.file(
+        "/files/huge.torrent",
+        Resource::new(vec![b'x'; 21 * 1024 * 1024]),
+    );
+    let env = Env::new();
+    let engine = open(&env, vec![s.addr], |_| {}).await;
+
+    let preview = engine
+        .probe_torrent(
+            TorrentSource::Url(server.url("/files/linked.torrent")),
+            "u1",
+            None,
+        )
+        .await
+        .unwrap();
+    assert_eq!(preview.name, "linked.bin");
+    assert_eq!(preview.info_hash, s.info_hash);
+    let v = engine
+        .add_torrent(AddTorrentRequest {
+            probe_id: Some(preview.probe_id),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    wait_t(&engine, &v.id, 30, "seeding", |v| {
+        state(v) == TorrentState::Seeding
+    })
+    .await;
+    assert_eq!(read(env.downloads.join("linked.bin")), body);
+
+    let err = engine
+        .probe_torrent(
+            TorrentSource::Url(server.url("/files/huge.torrent")),
+            "u2",
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert!(err.message.contains("too large"), "{}", err.message);
+    let err = engine
+        .probe_torrent(
+            TorrentSource::Url(server.url("/files/missing.torrent")),
+            "u3",
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(err.kind, fetchlane_engine::ErrorKind::NotFound);
 }
 
 #[tokio::test(flavor = "multi_thread")]

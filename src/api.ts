@@ -73,7 +73,10 @@ export interface TorrentPreview {
   saveAs: string;
 }
 
-export type TorrentSource = { type: "magnet"; value: string } | { type: "file"; value: string };
+export type TorrentSource =
+  | { type: "magnet"; value: string }
+  | { type: "file"; value: string }
+  | { type: "url"; value: string };
 
 export interface AddTorrentRequest {
   probeId?: string;
@@ -171,6 +174,16 @@ export function errorKind(e: unknown): ErrorKind | null {
   return e && typeof e === "object" && "kind" in e ? (e as CommandError).kind : null;
 }
 
+/** A link or .torrent file handed over by the browser extension or Windows. */
+export type ExternalAdd = { type: "link"; value: string } | { type: "torrentFile"; value: string };
+
+export interface IntegrationStatus {
+  browserHost: boolean;
+  magnetHandler: boolean;
+  magnetUserChoice: string | null;
+  extensionDir: string | null;
+}
+
 export const api = {
   list: () => invoke<Snapshot>("list_downloads"),
   probe: (url: string, destDir?: string) => invoke<ProbeResult>("probe_url", { url, destDir }),
@@ -204,4 +217,11 @@ export const api = {
   updateSettings: (settings: Settings) => invoke<Settings>("update_settings", { settings }),
   onChange: (cb: (s: Snapshot) => void): Promise<UnlistenFn> =>
     listen<Snapshot>("downloads-changed", (e) => cb(e.payload)),
+  takeExternalAdds: () => invoke<ExternalAdd[]>("take_external_adds"),
+  onExternalAdd: (cb: () => void): Promise<UnlistenFn> => listen("external-add", () => cb()),
+  onFocusDownload: (cb: (id: string) => void): Promise<UnlistenFn> =>
+    listen<string>("focus-download", (e) => cb(e.payload)),
+  integrationStatus: () => invoke<IntegrationStatus>("integration_status"),
+  setMagnetHandler: (enabled: boolean) => invoke<IntegrationStatus>("set_magnet_handler", { enabled }),
+  showExtensionFolder: () => invoke<void>("show_extension_folder"),
 };

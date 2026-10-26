@@ -13,6 +13,7 @@ use tauri::{AppHandle, Manager, State};
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_opener::OpenerExt;
 
+use crate::integration::{self, IntegrationStatus};
 use crate::AppState;
 
 #[derive(Debug, Serialize)]
@@ -202,15 +203,25 @@ pub fn resume_all(state: State<'_, AppState>) {
 
 #[tauri::command]
 pub fn open_file(app: AppHandle, state: State<'_, AppState>, id: String) -> CmdResult<()> {
-    let path = state.engine.completed_file(&id)?;
+    open_target(&app, &state.engine, &id)
+}
+
+#[tauri::command]
+pub fn show_in_folder(app: AppHandle, state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    reveal(&app, &state.engine, &id)
+}
+
+/// Open a completed download with its default app.
+pub fn open_target(app: &AppHandle, engine: &Engine, id: &str) -> CmdResult<()> {
+    let path = engine.completed_file(id)?;
     app.opener()
         .open_path(path.to_string_lossy(), None::<&str>)
         .map_err(|_| os_error("Windows couldn't open this file. There may be no app installed for this file type."))
 }
 
-#[tauri::command]
-pub fn show_in_folder(app: AppHandle, state: State<'_, AppState>, id: String) -> CmdResult<()> {
-    let target = state.engine.reveal_target(&id)?;
+/// Select a download's file in Explorer, or open its folder.
+pub fn reveal(app: &AppHandle, engine: &Engine, id: &str) -> CmdResult<()> {
+    let target = engine.reveal_target(id)?;
     let result = if target.is_file() {
         app.opener().reveal_item_in_dir(&target)
     } else {
@@ -218,6 +229,53 @@ pub fn show_in_folder(app: AppHandle, state: State<'_, AppState>, id: String) ->
             .open_path(target.to_string_lossy(), None::<&str>)
     };
     result.map_err(|_| os_error("The folder couldn't be opened."))
+}
+
+/// Where the browser extension is: bundled next to the app, or in the source
+/// tree for development builds.
+pub fn extension_dir(app: &AppHandle) -> Option<PathBuf> {
+    let bundled = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|d| d.join("browser-extension"));
+    let source = cfg!(debug_assertions)
+        .then(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../browser-extension"));
+    bundled
+        .into_iter()
+        .chain(source)
+        .find(|d| d.join("manifest.json").is_file())
+        .map(|d| dunce_path(&d))
+}
+
+/// Tidy `..` out of a path for display.
+fn dunce_path(p: &std::path::Path) -> PathBuf {
+    let s = p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    let text = s.to_string_lossy();
+    PathBuf::from(text.strip_prefix(r"\\?\").unwrap_or(&text))
+}
+
+#[tauri::command]
+pub fn integration_status(app: AppHandle) -> IntegrationStatus {
+    integration::status(extension_dir(&app))
+}
+
+#[tauri::command]
+pub fn set_magnet_handler(app: AppHandle, enabled: bool) -> CmdResult<IntegrationStatus> {
+    integration::set_magnet_handler(enabled)
+        .map_err(|_| os_error("Windows didn't allow changing the app for magnet links."))?;
+    Ok(integration::status(extension_dir(&app)))
+}
+
+/// Show the extension folder, for "Load unpacked" in the browser.
+#[tauri::command]
+pub fn show_extension_folder(app: AppHandle) -> CmdResult<()> {
+    let dir = extension_dir(&app).ok_or_else(|| {
+        os_error("The browser extension isn't included in this copy of Fetchlane.")
+    })?;
+    app.opener()
+        .open_path(dir.to_string_lossy(), None::<&str>)
+        .map_err(|_| os_error("The folder couldn't be opened."))
 }
 
 #[tauri::command]
