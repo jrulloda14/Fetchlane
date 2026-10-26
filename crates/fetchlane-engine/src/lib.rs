@@ -22,6 +22,7 @@ mod model;
 pub mod redact;
 mod speed;
 mod store;
+mod torrent;
 mod worker;
 
 use std::fmt;
@@ -33,9 +34,12 @@ use std::time::Duration;
 pub use engine::Engine;
 pub use error::{DownloadError, ErrorKind};
 pub use model::{
-    AddRequest, Density, DownloadRecord, DownloadView, ErrorInfo, Layout, Phase, ProbeResult,
-    QueueMove, Segment, Settings, Snapshot, Status, Theme, Validators,
+    AddRequest, AddTorrentRequest, DeleteScope, Density, DownloadKind, DownloadRecord,
+    DownloadView, ErrorInfo, Layout, Phase, ProbeResult, QueueMove, Segment, Settings, Snapshot,
+    Status, Theme, TorrentDetails, TorrentFile, TorrentFileView, TorrentPreview, TorrentSource,
+    TorrentState, TorrentSummary, Validators,
 };
+pub use torrent::TorrentConfig;
 
 /// Moves a completed file to the Recycle Bin (or the platform's trash).
 /// Replaceable so tests never touch the real Recycle Bin.
@@ -81,6 +85,7 @@ pub struct EngineConfig {
     /// How long shutdown waits for workers to checkpoint.
     pub shutdown_grace: Duration,
     pub trash: Trasher,
+    pub torrent: TorrentConfig,
 }
 
 impl Default for EngineConfig {
@@ -100,6 +105,7 @@ impl Default for EngineConfig {
             persist_debounce: Duration::from_millis(500),
             shutdown_grace: Duration::from_secs(5),
             trash: Trasher::default(),
+            torrent: TorrentConfig::default(),
         }
     }
 }

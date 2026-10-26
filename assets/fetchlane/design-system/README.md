@@ -33,6 +33,19 @@ Every status is **icon + word (+ detail)**, and the progress bar changes form as
 | Completed | `status-done` | check circle | Completed · 14:10 | none |
 | Cancelled | `ink-muted` | stop square | Cancelled · partial file deleted | none |
 
+Torrent states use the same tokens, so a glance reads the same for both kinds:
+
+| State | Token | Icon | Label | Bar |
+| --- | --- | --- | --- | --- |
+| Fetching details (magnet) | `status-queued` | spinner | Fetching details | indeterminate sweep |
+| Connecting | `status-queued` | globe | Connecting to peers | solid `progress-fill` |
+| Checking files | `status-progress` | magnifier | Checking files | solid `progress-fill` |
+| Stalled (no peers sending) | `status-retry` | warning | Stalled · waiting for peers | dashed `progress-retry` |
+| Seeding (complete, uploading) | `status-progress` | up arrow | Seeding · complete | none |
+| Complete, stopped | `status-done` | check circle | Completed · not seeding (or · seeding limit reached) | none |
+
+Downloading, Queued, Paused and Failed are shared with direct downloads; a torrent's Failed row offers **Retry** and **Recheck files** as its recovery.
+
 **Retrying vs Failed.** Amber means "Fetchlane is handling it": a live countdown, the attempt count, and the download keeps its slot. Red means "this needs you": retries are exhausted or the error is one Fetchlane never retries (disk full, 404, access denied, server can't resume). Failed downloads move to the Failed list, raise its count in `status-error`, and always show their recovery action as a labelled button in the row.
 
 ## Type
@@ -57,12 +70,12 @@ Every status is **icon + word (+ detail)**, and the progress bar changes form as
 
 Window minimum 960 × 640; designed at 1280 × 800.
 
-- **Title bar** (32): mark + "Fetchlane", standard Windows caption buttons. **Sidebar**: All downloads, Active, Queued, Completed, Failed with counts; Settings pinned to the bottom. **Toolbar**: Add download (primary), search (Ctrl+F), density switch, Pause all. **List heading** or **selection toolbar**. **Table**. **Status bar** summary.
-- Columns, in priority order: checkbox · **filename** (flexible, minimum 220 px, always the widest) · status + progress (248) · size (128) · speed (76) · time left (68) · actions (92, or 100 when a row needs a text button).
+- **Title bar** (32): mark + "Fetchlane", standard Windows caption buttons. **Sidebar**: All downloads, Active, Queued, Seeding, Completed, Failed with counts; Settings pinned to the bottom. **Toolbar**: Add download (primary), search (Ctrl+F), Pause all. Density lives in Settings only. **List heading** or **selection toolbar**. **Table**. **Status bar** summary.
+- Columns, in priority order: checkbox · **filename** (flexible, minimum 220 px, always the widest) · status + progress (248) · size (128) · speed (76, or 96 when the list holds torrents: download speed above upload speed, each with its arrow) · time left (68) · actions (92, or 100 when a row needs a text button).
 - When the list area is narrower than 1000 px, speed and time left fold into the status cell ("Downloading · 8.0 MB/s · 4 min left") and their columns are removed.
-- Sidebar collapses to a 56 px icon rail (counts under each icon, labels in tooltips and accessible names) below 1100 px window width, and also when the details panel is docked on a window narrower than 1440 px — the filename column keeps its room.
-- Details panel docks at ≥ 1200 px; below that it overlays the list from the right with `shadow-flyout`.
-- Below 900 px of list width, the density switch and Clear selection become icon-only (labels kept for screen readers) and search shortens to "Search".
+- The sidebar always stays expanded at 200 px. (The 56 px icon rail in the reference renderer is not used by the app.)
+- Details panel docks at ≥ 1320 px; below that it overlays the list from the right with `shadow-flyout`.
+- Below 900 px of list width, Clear selection becomes icon-only (label kept for screen readers) and search shortens to "Search".
 
 ## Interaction rules
 
@@ -74,8 +87,11 @@ Window minimum 960 × 640; designed at 1280 × 800.
 **Pause ≠ Cancel ≠ Remove.**
 - **Pause** stops the transfer and keeps the partial file. If the server can't resume, Pause is unavailable for that download (menu item disabled with the reason) and Pause all skips it.
 - **Cancel…** stops the transfer and deletes the partial file; it always asks first. The entry stays in the list as Cancelled so it can be downloaded again.
-- **Remove from list…** removes the entry only. Files on disk are kept unless the person ticks "Also delete the downloaded files from disk" (unticked by default; sends them to the Recycle Bin). The button turns destructive only when that box is ticked.
+- **Remove from list…** removes the entry only and always keeps files on disk.
+- **Delete downloaded files…** is a separate, destructive menu item. Its confirmation states the scope: how many files, how much data, the folder, and a few file names. **Keep files** is focused. Files go to the Recycle Bin.
 - Any action that discards partial progress — Cancel, Restart on a server that can't resume — opens a confirmation stating the size that will be lost, with the safe choice focused.
+
+**Torrents.** One list holds both kinds. Each row shows a quiet "Direct" or "Torrent" tag beside the host line (a torrent's host line reads "3 files" or "2 of 5 files"), and torrents use a folder icon when they hold more than one file. Peers and ratio stay in the details panel, not the row. Adding accepts a link, a magnet link, or a .torrent file (picker or drop on the window, which shows a drop zone). Magnet links show **Fetching torrent details** with **Cancel fetching** and an explicit **Start automatically after fetching details** checkbox, off by default; then the contents preview lists files with checkboxes, sizes, the selected total and the destination. **Stop seeding** keeps the files and the entry. Seeding is explained in Settings next to its limits: it means sharing pieces you've finished with other people, and Fetchlane stops on its own at the ratio or time set there.
 
 **Queue.** Queued downloads start top to bottom, `max` at a time (Settings, default 4; a retrying download keeps its slot). In All they show "Queued · #n in line"; the Queued list shows position numbers and drag handles, and supports Move to top / up / down (Alt+↑ / Alt+↓). "Download" in the add dialog starts now if a slot is free or goes first in line if not; "Add to queue" goes last.
 

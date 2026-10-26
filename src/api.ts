@@ -11,10 +11,27 @@ export type ErrorKind =
   | "internal";
 export type QueueMove = "top" | "up" | "down";
 export type Theme = "system" | "light" | "dark";
+export type DownloadKind = "direct" | "torrent";
+export type TorrentState =
+  | "fetching" | "queued" | "checking" | "connecting" | "downloading"
+  | "stalled" | "paused" | "seeding" | "stopped" | "error";
+
+export interface TorrentSummary {
+  state: TorrentState;
+  peersConnected: number;
+  peersKnown: number;
+  uploaded: number;
+  ratio: number;
+  fileCount: number;
+  selectedCount: number;
+  seedLimitReached: boolean;
+  infoHash: string;
+}
 export type Density = "comfortable" | "compact";
 
 export interface DownloadView {
   id: string;
+  kind: DownloadKind;
   displayUrl: string;
   hiddenParams: number;
   host: string;
@@ -36,6 +53,64 @@ export interface DownloadView {
   error: { kind: ErrorKind; message: string } | null;
   createdAt: number;
   completedAt: number | null;
+  uploadSpeed: number | null;
+  torrent: TorrentSummary | null;
+}
+
+export interface TorrentFile {
+  index: number;
+  path: string;
+  size: number;
+}
+
+export interface TorrentPreview {
+  probeId: string;
+  name: string;
+  infoHash: string;
+  totalSize: number;
+  files: TorrentFile[];
+  trackers: string[];
+  saveAs: string;
+}
+
+export type TorrentSource = { type: "magnet"; value: string } | { type: "file"; value: string };
+
+export interface AddTorrentRequest {
+  probeId?: string;
+  magnet?: string;
+  destDir?: string;
+  selected?: number[];
+  startPaused?: boolean;
+}
+
+export interface TorrentFileView extends TorrentFile {
+  have: number;
+  selected: boolean;
+}
+
+export interface TorrentDetails {
+  files: TorrentFileView[];
+  peersConnected: number;
+  peersConnecting: number;
+  peersKnown: number;
+  downloaded: number;
+  uploaded: number;
+  ratio: number;
+  trackers: string[];
+  seeding: boolean;
+  seededSecs: number;
+  ratioLimit: number | null;
+  timeLimitMinutes: number | null;
+  seedLimitReached: boolean;
+  infoHash: string;
+  savePath: string;
+}
+
+export interface DeleteScope {
+  fileCount: number;
+  totalBytes: number;
+  folder: string;
+  examples: string[];
 }
 
 export interface Snapshot {
@@ -71,6 +146,14 @@ export interface Settings {
   theme: Theme;
   density: Density;
   keepHistory: boolean;
+  notifyOnFinish: boolean;
+  torrentDownloadLimitKib: number;
+  torrentUploadLimitKib: number;
+  maxActiveTorrents: number;
+  seedRatioEnabled: boolean;
+  seedRatioPercent: number;
+  seedTimeEnabled: boolean;
+  seedTimeMinutes: number;
 }
 
 export interface CommandError {
@@ -109,6 +192,14 @@ export const api = {
   sourceUrl: (id: string) => invoke<string>("get_source_url", { id }),
   copySourceUrl: (id: string) => invoke<void>("copy_source_url", { id }),
   freeSpace: (path: string) => invoke<number | null>("free_space", { path }),
+  probeTorrent: (source: TorrentSource, probeId: string, destDir?: string) =>
+    invoke<TorrentPreview>("probe_torrent", { source, probeId, destDir }),
+  cancelTorrentProbe: (probeId: string) => invoke<void>("cancel_torrent_probe", { probeId }),
+  addTorrent: (request: AddTorrentRequest) => invoke<DownloadView>("add_torrent", { request }),
+  recheck: (id: string) => invoke<void>("recheck_torrent", { id }),
+  setTorrentFiles: (id: string, selected: number[]) => invoke<void>("set_torrent_files", { id, selected }),
+  torrentDetails: (id: string) => invoke<TorrentDetails>("torrent_details", { id }),
+  deleteScope: (id: string) => invoke<DeleteScope>("delete_scope", { id }),
   getSettings: () => invoke<Settings>("get_settings"),
   updateSettings: (settings: Settings) => invoke<Settings>("update_settings", { settings }),
   onChange: (cb: (s: Snapshot) => void): Promise<UnlistenFn> =>

@@ -9,8 +9,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use fetchlane_engine::{Engine, EngineConfig};
-use tauri::{Emitter, Manager, RunEvent};
+use std::collections::HashSet;
+
+use fetchlane_engine::{Engine, EngineConfig, Snapshot};
+use tauri::{AppHandle, Emitter, Manager, RunEvent};
+use tauri_plugin_notification::NotificationExt;
 use tokio::sync::broadcast::error::RecvError;
 
 pub struct AppState {
@@ -38,10 +41,36 @@ fn init_logging(log_dir: &Path) {
         .try_init();
 }
 
+/// Downloads that have finished (completed, or a torrent that is seeding).
+fn finished_ids(snap: &Snapshot) -> HashSet<String> {
+    snap.downloads
+        .iter()
+        .filter(|d| d.completed_at.is_some())
+        .map(|d| d.id.clone())
+        .collect()
+}
+
+/// Show a notification for each download that finished since `before`.
+fn notify_finished(app: &AppHandle, snap: &Snapshot, before: &HashSet<String>) {
+    for d in snap
+        .downloads
+        .iter()
+        .filter(|d| d.completed_at.is_some() && !before.contains(&d.id))
+    {
+        let _ = app
+            .notification()
+            .builder()
+            .title("Download finished")
+            .body(&d.file_name)
+            .show();
+    }
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
@@ -59,6 +88,7 @@ fn main() {
             let handle = app.handle().clone();
             let mut changes = engine.subscribe();
             let forward = engine.clone();
+            let mut finished = finished_ids(&engine.snapshot());
             tauri::async_runtime::spawn(async move {
                 loop {
                     match changes.recv().await {
@@ -67,7 +97,12 @@ fn main() {
                     }
                     tokio::time::sleep(Duration::from_millis(100)).await;
                     while changes.try_recv().is_ok() {}
-                    let _ = handle.emit("downloads-changed", forward.snapshot());
+                    let snap = forward.snapshot();
+                    if forward.settings().notify_on_finish {
+                        notify_finished(&handle, &snap, &finished);
+                    }
+                    finished = finished_ids(&snap);
+                    let _ = handle.emit("downloads-changed", snap);
                 }
             });
 
@@ -91,6 +126,13 @@ fn main() {
             commands::get_source_url,
             commands::copy_source_url,
             commands::free_space,
+            commands::probe_torrent,
+            commands::cancel_torrent_probe,
+            commands::add_torrent,
+            commands::recheck_torrent,
+            commands::set_torrent_files,
+            commands::torrent_details,
+            commands::delete_scope,
             commands::clear_finished,
             commands::pause_all,
             commands::resume_all,

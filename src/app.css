@@ -84,3 +84,94 @@ body {
 .fl-search input::-webkit-search-cancel-button {
   display: none;
 }
+
+/* ---------- direct downloads and torrents ---------- */
+
+/* Subtle type indicator before the host / file count. */
+.fl-kind {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 4px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-xs);
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-subtle);
+  vertical-align: 1px;
+}
+
+/* Torrent states use the existing status tokens: amber means waiting on
+   others, red needs you, green is complete. */
+.fl-st-fetching,
+.fl-st-connecting { color: var(--status-queued); }
+.fl-st-checking,
+.fl-st-seeding { color: var(--status-progress); }
+.fl-st-stalled { color: var(--status-retry); }
+.fl-st-stopped { color: var(--status-done); }
+.fl-st-fetching .fl-i { animation: fl-spin 0.9s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .fl-st-fetching .fl-i { animation-duration: 2.4s; }
+}
+
+/* Download and upload speed stacked in the Speed column. */
+.fl-speeds { display: flex; flex-direction: column; align-items: flex-end; line-height: 16px; }
+.fl-speeds .fl-metric { line-height: 16px; }
+.fl-dir { display: inline-flex; vertical-align: -1px; margin-right: 3px; color: var(--ink-subtle); }
+.fl-compact .fl-speeds { flex-direction: row; gap: 8px; }
+
+.fl-ftype-folder { display: inline-flex; flex: none; color: var(--ink-subtle); }
+.fl-dhead .fl-ftype-folder { margin-top: 2px; }
+
+/* File lists: torrent contents preview and details panel. */
+.fl-tfiles {
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  overflow: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-100);
+  padding: 2px 0;
+}
+.fl-tfiles.is-dialog { max-height: 200px; }
+.fl-tfile {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 18px;
+}
+.fl-tfiles.is-dialog .fl-tfile { grid-template-columns: 16px minmax(0, 1fr) auto; }
+.fl-tfile .fl-check { width: 16px; height: 16px; }
+.fl-tfile.is-off .fl-tpath { color: var(--ink-subtle); }
+.fl-tpath { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-mono); }
+.fl-tpct { min-width: 42px; text-align: right; color: var(--ink-muted); font-variant-numeric: tabular-nums; }
+.fl-tsummary { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.fl-tsummary .fl-fn { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.fl-trackers { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.fl-trackers li { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-muted); }
+
+.fl-dialog.is-wide { width: 600px; }
+.fl-addalt { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; }
+
+/* Drop a .torrent file anywhere on the window. */
+.fl-dropzone {
+  position: fixed;
+  inset: 40px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 2px dashed var(--accent);
+  border-radius: var(--radius-lg);
+  background: var(--scrim);
+  color: var(--ink-strong);
+  pointer-events: none;
+}
+.fl-dialog.is-drop { outline: 2px dashed var(--accent); outline-offset: 4px; }

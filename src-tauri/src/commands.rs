@@ -4,8 +4,9 @@
 use std::path::PathBuf;
 
 use fetchlane_engine::{
-    AddRequest, DownloadError, DownloadView, Engine, ErrorKind, ProbeResult, QueueMove, Settings,
-    Snapshot, Theme,
+    AddRequest, AddTorrentRequest, DeleteScope, DownloadError, DownloadView, Engine, ErrorKind,
+    ProbeResult, QueueMove, Settings, Snapshot, Theme, TorrentDetails, TorrentPreview,
+    TorrentSource,
 };
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
@@ -131,8 +132,62 @@ pub fn free_space(path: PathBuf) -> Option<u64> {
 }
 
 #[tauri::command]
-pub fn clear_finished(state: State<'_, AppState>) {
-    state.engine.clear_finished();
+pub async fn clear_finished(state: State<'_, AppState>) -> CmdResult<()> {
+    state.engine.clear_finished().await;
+    Ok(())
+}
+
+/// Read a .torrent file or fetch a magnet link's details. `probe_id` lets
+/// `cancel_torrent_probe` stop a magnet fetch.
+#[tauri::command]
+pub async fn probe_torrent(
+    state: State<'_, AppState>,
+    source: TorrentSource,
+    probe_id: String,
+    dest_dir: Option<PathBuf>,
+) -> CmdResult<TorrentPreview> {
+    Ok(state
+        .engine
+        .probe_torrent(source, &probe_id, dest_dir.as_deref())
+        .await?)
+}
+
+#[tauri::command]
+pub fn cancel_torrent_probe(state: State<'_, AppState>, probe_id: String) {
+    state.engine.cancel_torrent_probe(&probe_id);
+}
+
+#[tauri::command]
+pub async fn add_torrent(
+    state: State<'_, AppState>,
+    request: AddTorrentRequest,
+) -> CmdResult<DownloadView> {
+    Ok(state.engine.add_torrent(request).await?)
+}
+
+#[tauri::command]
+pub async fn recheck_torrent(state: State<'_, AppState>, id: String) -> CmdResult<()> {
+    Ok(state.engine.recheck(&id).await?)
+}
+
+#[tauri::command]
+pub async fn set_torrent_files(
+    state: State<'_, AppState>,
+    id: String,
+    selected: Vec<usize>,
+) -> CmdResult<()> {
+    Ok(state.engine.set_torrent_files(&id, selected).await?)
+}
+
+#[tauri::command]
+pub fn torrent_details(state: State<'_, AppState>, id: String) -> CmdResult<TorrentDetails> {
+    Ok(state.engine.torrent_details(&id)?)
+}
+
+/// What "Delete downloaded files" would remove, for the confirmation.
+#[tauri::command]
+pub fn delete_scope(state: State<'_, AppState>, id: String) -> CmdResult<DeleteScope> {
+    Ok(state.engine.delete_scope(&id)?)
 }
 
 #[tauri::command]

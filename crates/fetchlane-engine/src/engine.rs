@@ -14,12 +14,14 @@ use tokio_util::sync::CancellationToken;
 
 use crate::error::{DownloadError, ErrorKind};
 use crate::model::{
-    AddRequest, DownloadRecord, DownloadView, ErrorInfo, Layout, Phase, ProbeResult, QueueMove,
-    Settings, Snapshot, Status,
+    AddRequest, AddTorrentRequest, DeleteScope, DownloadKind, DownloadRecord, DownloadView,
+    ErrorInfo, Layout, Phase, ProbeResult, QueueMove, Settings, Snapshot, Status, TorrentDetails,
+    TorrentPreview, TorrentSource,
 };
 use crate::redact::{display_url, host_of, query_param_count, redact_url};
 use crate::speed::SpeedMeter;
 use crate::store::Store;
+use crate::torrent::Torrents;
 use crate::worker::RunOptions;
 use crate::{filename, http, worker, EngineConfig};
 
@@ -250,6 +252,8 @@ pub(crate) struct Inner {
     /// Running worker tasks per download, and the highest count ever seen.
     /// The scheduler guarantees at most one; this checks that it does.
     running: Mutex<(std::collections::HashMap<String, usize>, usize)>,
+    /// BitTorrent downloads, shown in the same list.
+    pub torrents: Arc<Torrents>,
 }
 
 /// Handle to the download engine. Cheap to clone.
@@ -348,7 +352,8 @@ impl Engine {
     ) -> Result<Self, DownloadError> {
         let rt = Handle::try_current()
             .map_err(|_| DownloadError::internal("No async runtime available."))?;
-        let store = Store::new(data_dir.into()).map_err(|e| DownloadError::from_io(&e))?;
+        let data_dir: PathBuf = data_dir.into();
+        let store = Store::new(data_dir.clone()).map_err(|e| DownloadError::from_io(&e))?;
         let settings = store.load_settings().normalized();
         let (mut records, queue_held) = store.load_downloads();
         for rec in &mut records {
@@ -356,6 +361,16 @@ impl Engine {
         }
         let client = http::build_client(&cfg)?;
         let (changed, _) = broadcast::channel(16);
+        let torrents = Arc::new(
+            Torrents::new(
+                cfg.torrent.clone(),
+                &data_dir,
+                changed.clone(),
+                cfg.trash.clone(),
+            )
+            .map_err(|e| DownloadError::from_io(&e))?,
+        );
+        torrents.apply_settings(&settings);
         let entries = records.into_iter().map(Entry::new).collect();
         let inner = Arc::new(Inner {
             cfg,
@@ -373,10 +388,29 @@ impl Engine {
             closed: AtomicBool::new(false),
             rt,
             running: Mutex::new(Default::default()),
+            torrents,
         });
         inner.persist_now();
         inner.spawn_background();
         inner.schedule();
+        let t = inner.torrents.clone();
+        if !t.is_empty() {
+            inner.rt.spawn(async move { t.restore().await });
+        }
+        let weak = Arc::downgrade(&inner);
+        let interval = inner.cfg.torrent.tick_interval;
+        inner.rt.spawn(async move {
+            loop {
+                tokio::time::sleep(interval).await;
+                let Some(inner) = weak.upgrade() else { break };
+                if inner.closed.load(Ordering::SeqCst) {
+                    break;
+                }
+                let t = inner.torrents.clone();
+                drop(inner);
+                t.tick().await;
+            }
+        });
         Ok(Self { inner })
     }
 
@@ -387,7 +421,12 @@ impl Engine {
 
     /// Every download (in queue order) plus queue-wide state.
     pub fn snapshot(&self) -> Snapshot {
-        lock(&self.inner.state).snapshot()
+        let (mut snap, settings) = {
+            let st = lock(&self.inner.state);
+            (st.snapshot(), st.settings.clone())
+        };
+        snap.downloads.extend(self.inner.torrents.views(&settings));
+        snap
     }
 
     pub fn list(&self) -> Vec<DownloadView> {
@@ -401,6 +440,9 @@ impl Engine {
     /// Full source URL, including credentials and query, for "Copy link"
     /// and for revealing hidden parameters.
     pub fn source_url(&self, id: &str) -> Result<String, DownloadError> {
+        if self.inner.torrents.contains(id) {
+            return self.inner.torrents.source_link(id);
+        }
         let st = lock(&self.inner.state);
         Ok(st.entries[st.index(id).ok_or_else(not_found)?]
             .rec
@@ -430,6 +472,7 @@ impl Engine {
             .save_settings(&settings)
             .map_err(|e| DownloadError::from_io(&e))?;
         lock(&self.inner.state).settings = settings.clone();
+        self.inner.torrents.apply_settings(&settings);
         self.inner.schedule();
         self.inner.notify_changed();
         Ok(settings)
@@ -566,6 +609,9 @@ impl Engine {
     }
 
     pub fn pause(&self, id: &str) -> Result<(), DownloadError> {
+        if self.inner.torrents.contains(id) {
+            return self.inner.torrents.pause(id);
+        }
         {
             let mut st = lock(&self.inner.state);
             let e = st.entry_mut(id)?;
@@ -593,6 +639,9 @@ impl Engine {
 
     /// Resume a paused download, retry a failed one, or restart a canceled one.
     pub fn resume(&self, id: &str) -> Result<(), DownloadError> {
+        if self.inner.torrents.contains(id) {
+            return self.inner.torrents.resume(id, false);
+        }
         {
             let mut st = lock(&self.inner.state);
             let e = st.entry_mut(id)?;
@@ -616,6 +665,9 @@ impl Engine {
 
     /// "Start now": start immediately, even if every slot is busy.
     pub fn start_now(&self, id: &str) -> Result<(), DownloadError> {
+        if self.inner.torrents.contains(id) {
+            return self.inner.torrents.resume(id, true);
+        }
         {
             let mut st = lock(&self.inner.state);
             let idx = st.index(id).ok_or_else(not_found)?;
@@ -650,6 +702,9 @@ impl Engine {
     /// "Retry now": skip the remaining wait before an automatic retry, or
     /// retry a failed download.
     pub fn retry_now(&self, id: &str) -> Result<(), DownloadError> {
+        if self.inner.torrents.contains(id) {
+            return self.inner.torrents.resume(id, false);
+        }
         {
             let st = lock(&self.inner.state);
             let e = &st.entries[st.index(id).ok_or_else(not_found)?];
@@ -665,6 +720,11 @@ impl Engine {
 
     /// Delete partial data and download again from the beginning.
     pub fn restart(&self, id: &str) -> Result<(), DownloadError> {
+        if self.inner.torrents.contains(id) {
+            return Err(DownloadError::invalid(
+                "Torrents can't be cancelled or restarted. Remove them from the list, or delete their files.",
+            ));
+        }
         let mut delete = None;
         {
             let mut st = lock(&self.inner.state);
@@ -712,6 +772,11 @@ impl Engine {
     /// Put a queued download at `position` (1-based) in the queue, for
     /// drag-and-drop reordering. Positions past the end mean last.
     pub fn move_to_position(&self, id: &str, position: u32) -> Result<(), DownloadError> {
+        if self.inner.torrents.contains(id) {
+            return Err(DownloadError::invalid(
+                "Torrents start in the order they were added.",
+            ));
+        }
         {
             let mut st = lock(&self.inner.state);
             let idx = st.index(id).ok_or_else(not_found)?;
@@ -734,6 +799,11 @@ impl Engine {
 
     /// Stop a download and delete its partial data. Completed files are kept.
     pub fn cancel(&self, id: &str) -> Result<(), DownloadError> {
+        if self.inner.torrents.contains(id) {
+            return Err(DownloadError::invalid(
+                "Torrents can't be cancelled or restarted. Remove them from the list, or delete their files.",
+            ));
+        }
         let mut delete = None;
         {
             let mut st = lock(&self.inner.state);
@@ -763,6 +833,9 @@ impl Engine {
     /// A completed file is kept unless `delete_files` is set, in which case
     /// it goes to the Recycle Bin; if that fails the entry stays.
     pub async fn remove(&self, id: &str, delete_files: bool) -> Result<(), DownloadError> {
+        if self.inner.torrents.contains(id) {
+            return self.inner.torrents.remove(id, delete_files).await;
+        }
         let to_trash = {
             let st = lock(&self.inner.state);
             let e = &st.entries[st.index(id).ok_or_else(not_found)?];
@@ -814,11 +887,15 @@ impl Engine {
     }
 
     /// Remove completed and canceled downloads from the list.
-    pub fn clear_finished(&self) {
+    pub async fn clear_finished(&self) {
         lock(&self.inner.state).entries.retain(|e| {
             e.live.is_some() || !matches!(e.rec.status, Status::Completed | Status::Canceled)
         });
         self.inner.persist_now();
+        // Finished torrents that are still seeding stay in the list.
+        for id in self.inner.torrents.clear_finished() {
+            let _ = self.inner.torrents.remove(&id, false).await;
+        }
         self.inner.notify_changed();
     }
 
@@ -838,6 +915,7 @@ impl Engine {
         for id in ids {
             let _ = self.pause(&id);
         }
+        self.inner.torrents.pause_all();
         self.inner.persist_now();
         self.inner.notify_changed();
     }
@@ -854,13 +932,18 @@ impl Engine {
                 }
             }
         }
+        self.inner.torrents.resume_all();
         self.inner.persist_now();
         self.inner.schedule();
         self.inner.notify_changed();
     }
 
-    /// Path of a completed download's file, if it still exists.
+    /// Path of a completed download's file, if it still exists. For a
+    /// multi-file torrent this is its folder.
     pub fn completed_file(&self, id: &str) -> Result<PathBuf, DownloadError> {
+        if self.inner.torrents.contains(id) {
+            return self.inner.torrents.open_target(id);
+        }
         let st = lock(&self.inner.state);
         let e = &st.entries[st.index(id).ok_or_else(not_found)?];
         if e.rec.status != Status::Completed {
@@ -878,6 +961,9 @@ impl Engine {
 
     /// What "show in folder" should reveal: the file if complete, else its folder.
     pub fn reveal_target(&self, id: &str) -> Result<PathBuf, DownloadError> {
+        if self.inner.torrents.contains(id) {
+            return self.inner.torrents.reveal_target(id);
+        }
         if let Ok(path) = self.completed_file(id) {
             return Ok(path);
         }
@@ -918,8 +1004,76 @@ impl Engine {
             }
         }
         inner.persist_now();
+        inner.torrents.shutdown().await;
         inner.closed.store(true, Ordering::SeqCst);
         inner.persist_wake.notify_one();
+    }
+
+    /* ---------------- torrents ---------------- */
+
+    /// Read a .torrent file or fetch a magnet link's details, for the
+    /// contents preview. Cancel with [`Engine::cancel_torrent_probe`].
+    pub async fn probe_torrent(
+        &self,
+        source: TorrentSource,
+        probe_id: &str,
+        dest_dir: Option<&Path>,
+    ) -> Result<TorrentPreview, DownloadError> {
+        let dir = dest_dir
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| self.settings().download_dir);
+        self.inner
+            .torrents
+            .probe(source, probe_id.to_string(), &dir)
+            .await
+    }
+
+    pub fn cancel_torrent_probe(&self, probe_id: &str) {
+        self.inner.torrents.cancel_probe(probe_id);
+    }
+
+    pub async fn add_torrent(&self, req: AddTorrentRequest) -> Result<DownloadView, DownloadError> {
+        let dir = self.settings().download_dir;
+        let id = self.inner.torrents.add(req, &dir).await?;
+        self.get(&id).ok_or_else(not_found)
+    }
+
+    /// Verify all data on disk again; bad pieces are downloaded again.
+    pub async fn recheck(&self, id: &str) -> Result<(), DownloadError> {
+        self.inner.torrents.recheck(id).await
+    }
+
+    pub async fn set_torrent_files(
+        &self,
+        id: &str,
+        selected: Vec<usize>,
+    ) -> Result<(), DownloadError> {
+        self.inner.torrents.set_files(id, selected).await
+    }
+
+    pub fn torrent_details(&self, id: &str) -> Result<TorrentDetails, DownloadError> {
+        self.inner.torrents.details(id)
+    }
+
+    /// What "Delete downloaded files" would remove.
+    pub fn delete_scope(&self, id: &str) -> Result<DeleteScope, DownloadError> {
+        if self.inner.torrents.contains(id) {
+            return self.inner.torrents.delete_scope(id);
+        }
+        let st = lock(&self.inner.state);
+        let e = &st.entries[st.index(id).ok_or_else(not_found)?];
+        let path = if e.rec.status == Status::Completed {
+            e.rec.dest_dir.join(&e.rec.file_name)
+        } else {
+            part_path(&e.rec)
+        };
+        let len = fs::metadata(&path).map(|m| m.len()).ok();
+        Ok(DeleteScope {
+            file_count: len.is_some() as u32,
+            total_bytes: len.unwrap_or(0),
+            folder: e.rec.dest_dir.clone(),
+            examples: len.map(|_| e.rec.file_name.clone()).into_iter().collect(),
+        })
     }
 
     /// Highest number of workers ever running at once for a single download.
@@ -961,6 +1115,7 @@ fn view(e: &Entry, queue_position: Option<u32>, retry_limit: u32) -> DownloadVie
         .filter(|&n| n > 0);
     DownloadView {
         id: rec.id.clone(),
+        kind: DownloadKind::Direct,
         display_url: display_url(&rec.url),
         hidden_params: query_param_count(&rec.url),
         host: host_of(&rec.url),
@@ -982,6 +1137,8 @@ fn view(e: &Entry, queue_position: Option<u32>, retry_limit: u32) -> DownloadVie
         error: rec.error.clone(),
         created_at: rec.created_at,
         completed_at: rec.completed_at,
+        upload_speed: None,
+        torrent: None,
     }
 }
 

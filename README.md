@@ -6,6 +6,8 @@
 
 An open-source desktop download manager focused on one thing above all else: **files that
 arrive intact**, even after dropped connections, pauses, crashes, and misbehaving servers.
+It handles direct HTTP/HTTPS downloads and BitTorrent (magnet links and .torrent files) in
+one list.
 
 Built with Rust and [Tauri 2](https://tauri.app). It is MIT-licensed, written from scratch,
 and not affiliated with any commercial download manager.
@@ -17,20 +19,22 @@ and not affiliated with any commercial download manager.
 **App**
 
 - A desktop window built from the Fetchlane design system: sidebar lists (All, Active,
-  Queued, Completed, Failed), a toolbar, a download table with live progress, a details
-  panel, and a status bar
+  Queued, Seeding, Completed, Failed), a toolbar, one download table for direct downloads
+  and torrents with live progress, a details panel, and a status bar with download and
+  upload speeds
 - Add download: paste a link anywhere with Ctrl+V. Fetchlane checks the name and size,
   warns about name clashes, shows free space, and offers **Download** (first in line) or
   **Add to queue**.
+- A notification when a download finishes (can be turned off in Settings)
 - Per-download actions, an overflow and right-click menu, multi-select with a selection
   toolbar, drag-to-reorder in the queue, and full keyboard control (arrow keys, Space,
   Enter, Delete, Ctrl+N/F/I/A, Alt+↑/↓, Shift+F10)
 - Confirmations that state what will be lost (cancel, restart, remove), with the safe
   choice focused
 - Settings that apply immediately: folder, simultaneous downloads, connections, retries,
-  theme (System/Light/Dark), density, and history
-- Responsive layout down to 960 × 640: the sidebar collapses to an icon rail, and the speed
-  and time-left columns fold into the status cell
+  theme (System/Light/Dark), density, history, and torrent limits
+- Responsive layout down to 960 × 640: the sidebar stays expanded, and the speed and
+  time-left columns fold into the status cell
 
 **Engine**
 
@@ -66,6 +70,30 @@ and not affiliated with any commercial download manager.
   "The file wasn't found on the server (HTTP 404)"
 - TLS certificates verified through the OS trust store. Credentials and query strings are
   never logged or shown.
+
+**Torrents**
+
+- Add a magnet link (paste it like any link), or a .torrent file with **Open .torrent
+  file…** or by dropping it on the window
+- Magnet links show **Fetching torrent details** (cancellable) and then the contents. With
+  **Start automatically after fetching details** (off by default) the torrent starts as soon
+  as its details arrive, with all files selected.
+- A contents preview before anything is downloaded: file selection with sizes, the total
+  selected, and the destination. Files can be selected or skipped later in the details panel.
+- States: Fetching details, Queued, Checking files, Connecting, Downloading, Stalled
+  (waiting for peers), Paused, Seeding, Complete (stopped), and Error with a recovery action
+- Details panel: files and selection, peers, downloaded and uploaded totals, ratio, seeding
+  status and limits, trackers (collapsible), and **Recheck files**
+- **Stop seeding**, **Remove from list** (keeps files), and **Delete downloaded files**
+  (sends only this torrent's own files to the Recycle Bin, after a confirmation that shows
+  how many files, how much data, and which folder) are separate actions
+- Settings: download and upload speed limits, active torrent limit (default 3), and
+  automatic seeding limits by ratio (default 1.0) and by time
+- Files are verified piece by piece, and a new torrent never writes into an existing file
+  or folder: it gets a unique name, like direct downloads. File names are checked for
+  path traversal and Windows reserved names.
+- Uses [librqbit](https://github.com/ikatson/rqbit) (Apache-2.0) with DHT, trackers, and
+  local peer discovery
 
 ## Prerequisites (Windows)
 
@@ -113,6 +141,7 @@ This produces a per-user installer (no admin rights needed) at
 ```
 crates/fetchlane-engine/       Download engine: pure Rust, no UI dependency
   src/engine.rs            Download list, queue scheduler, commands, lifecycle, recovery
+  src/torrent.rs           Torrents: librqbit session, probes, states, seeding limits, deletion
   src/worker.rs            One download: requests, range validation, segments, checkpoints, finalize
   src/http.rs              Client setup (TLS, redirect policy), header parsing
   src/filename.rs          Name extraction, sanitization, collision-free naming
@@ -171,6 +200,7 @@ destination folder. The engine broadcasts changes, and the shell forwards them a
 **Where data lives.**
 
 - Download list and settings: `%APPDATA%\dev.fetchlane.desktop\state\`
+- Torrent list and saved .torrent metadata: `state	orrents.json` and `state	orrents\`
 - Log: `%LOCALAPPDATA%\dev.fetchlane.desktop\logs\fetchlane.log` (rotated at 5 MB)
 
 ## Known limitations
@@ -197,8 +227,18 @@ destination folder. The engine broadcasts changes, and the shell forwards them a
   profile. Logs and the UI show redacted URLs only.
 - The system proxy is used, but there is no UI for proxy authentication.
 - The free-space check before downloading is best-effort.
-- Deferred until after the MVP: browser integration, scheduling, torrents, media
-  extraction, and automatic updates.
+- Torrents:
+  - The details panel shows connected and known peers. librqbit doesn't report seeds
+    separately, so seeds aren't counted on their own.
+  - Progress isn't saved between runs. On startup each torrent checks its files again
+    before continuing, which takes a moment for large torrents.
+  - The first time a torrent starts, Windows Firewall may ask whether Fetchlane can accept
+    incoming connections. Torrents still work if you decline, with fewer peers.
+  - DHT is always on. There is no setting for encryption, port forwarding (UPnP), or a
+    proxy for peer connections.
+  - Torrents can't be reordered by dragging. The active torrent limit starts them in list order.
+- Deferred until after the MVP: browser integration, scheduling, media extraction, and
+  automatic updates.
 
 ## License
 

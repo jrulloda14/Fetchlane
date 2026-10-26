@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DownloadView } from "./api";
+import type { DownloadView, TorrentState } from "./api";
 import { checkLink, counts, groups, selectionCounts, structureKey, toItem, visible } from "./model";
 import { driveOf, fmtDur, fmtPair, fmtSize, fmtSpeed, esc, hostOf, when } from "./format";
 
@@ -9,6 +9,9 @@ const HOUR = 3_600_000;
 function view(over: Partial<DownloadView>): DownloadView {
   return {
     id: "x",
+    kind: "direct",
+    uploadSpeed: null,
+    torrent: null,
     displayUrl: "https://example.com/a.zip",
     hiddenParams: 0,
     host: "example.com",
@@ -49,6 +52,67 @@ describe("toItem", () => {
   });
 });
 
+function torrent(id: string, state: TorrentState, over: Partial<DownloadView> = {}): DownloadView {
+  return view({
+    id,
+    kind: "torrent",
+    host: "3 files",
+    phase: null,
+    uploadSpeed: state === "seeding" ? 1000 : null,
+    torrent: {
+      state, peersConnected: 4, peersKnown: 20, uploaded: 50, ratio: 0.5,
+      fileCount: 3, selectedCount: 2, seedLimitReached: false, infoHash: "abc",
+    },
+    ...over,
+  });
+}
+
+describe("torrents", () => {
+  it("maps every torrent state", () => {
+    const map: Record<TorrentState, string> = {
+      fetching: "fetching", queued: "queued", checking: "checking", connecting: "connecting",
+      downloading: "downloading", stalled: "stalled", paused: "paused", seeding: "seeding",
+      stopped: "stopped", error: "failed",
+    };
+    for (const [state, ui] of Object.entries(map)) expect(toItem(torrent("t", state as TorrentState)).status).toBe(ui);
+    const t = toItem(torrent("t", "seeding"));
+    expect(t.kind).toBe("torrent");
+    expect(t.up).toBe(1000);
+    expect([t.peers, t.peersKnown, t.selectedCount, t.fileCount]).toEqual([4, 20, 2, 3]);
+  });
+
+  it("puts torrents in the right lists", () => {
+    const items = [
+      torrent("seed", "seeding", { completedAt: NOW - HOUR }),
+      torrent("stop", "stopped", { completedAt: NOW - HOUR }),
+      torrent("stall", "stalled"),
+      torrent("fetch", "fetching"),
+      torrent("q", "queued", { queuePosition: 1 }),
+      view({ id: "d" }),
+    ].map(toItem);
+    const c = counts(items);
+    expect(c.seeding).toBe(1);
+    expect(c.completed).toBe(2);
+    expect(c.active).toBe(3);
+    expect(c.queued).toBe(1);
+    const g = groups(visible(items, "all", ""), "all", "", NOW);
+    expect(g.map((x) => x.key)).toEqual(["progress", "seeding", "today"]);
+    expect(g[0].items.map((d) => d.id)).toEqual(["d", "stall", "fetch", "q"]);
+    expect(g[2].items.map((d) => d.id)).toEqual(["stop"]);
+    // Direct downloads come before torrents in the queue view.
+    const q = visible([toItem(torrent("tq", "queued", { queuePosition: 1 })), toItem(view({ id: "dq", status: "queued", phase: null, queuePosition: 2 }))], "queued", "");
+    expect(q.map((d) => d.id)).toEqual(["dq", "tq"]);
+  });
+
+  it("selection actions account for torrents", () => {
+    const items = [torrent("a", "stalled"), torrent("b", "seeding"), torrent("c", "queued")].map(toItem);
+    const n = selectionCounts(items);
+    expect(n.pause).toBe(1);
+    expect(n.resume).toBe(1);
+    expect(n.toTop).toBe(0);
+  });
+});
+
 describe("lists", () => {
   const items = [
     view({ id: "dl" }),
@@ -62,7 +126,7 @@ describe("lists", () => {
   ].map(toItem);
 
   it("counts every list", () => {
-    expect(counts(items)).toEqual({ all: 8, active: 2, queued: 2, completed: 2, failed: 1 });
+    expect(counts(items)).toEqual({ all: 8, active: 2, queued: 2, seeding: 0, completed: 2, failed: 1 });
   });
 
   it("orders the queue and the in-progress group", () => {
@@ -100,8 +164,10 @@ describe("links", () => {
     expect(checkLink("htt")).toBe("typing");
     expect(checkLink("https://")).toBe("typing");
     expect(checkLink("https://example.com/f.zip")).toBe("ok");
-    expect(checkLink("magnet:?xt=urn:btih:abc")).toBe("unsupported");
-    expect(checkLink("https://x.org/a.torrent")).toBe("unsupported");
+    expect(checkLink("magnet:?xt=urn:btih:abc")).toBe("magnet");
+    expect(checkLink("magnet:?dn=nothing")).toBe("invalid");
+    expect(checkLink("magn")).toBe("typing");
+    expect(checkLink("https://x.org/a.torrent")).toBe("ok");
     expect(checkLink("ftp://x.org/a")).toBe("invalid");
     expect(checkLink("just words")).toBe("invalid");
   });

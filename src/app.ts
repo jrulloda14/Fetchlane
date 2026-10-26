@@ -2,18 +2,21 @@
 // Behaviour follows the design system's reference renderer; every action
 // goes to the real backend (see api.ts).
 import { getVersion } from "@tauri-apps/api/app";
+import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 
-import { api, errorKind, errorMessage, type QueueMove, type Settings, type Snapshot } from "./api";
+import {
+  api, type DeleteScope, errorKind, errorMessage, type QueueMove, type Settings, type Snapshot, type TorrentDetails,
+} from "./api";
 import { driveOf, esc, fmtDur, fmtPair, fmtSize, fmtSpeed, plural, pct } from "./format";
 import { icon } from "./icons";
 import {
-  checkLink, counts, groups, isFinished, type Item, structureKey, toItem, type ViewId, VIEWS, visible,
+  checkLink, counts, groups, isComplete, isFinished, type Item, structureKey, toItem, type ViewId, VIEWS, visible,
 } from "./model";
 import {
-  type AddState, addHTML, confirmHTML, detailsHTML, emptyHTML, listHeadHTML, menuItems, removeHTML, selbarHTML,
+  type AddState, addHTML, confirmHTML, deleteHTML, detailsHTML, emptyHTML, listHeadHTML, menuItems, removeHTML, selbarHTML,
   settingsHTML, sidebarHTML, sparkHTML, statusbarHTML, tableHTML, titlebarHTML, toolbarHTML,
 } from "./views";
 
@@ -21,7 +24,8 @@ type Dialog =
   | { type: "add"; g: AddState; nameEdited: boolean }
   | { type: "cancel"; id: string }
   | { type: "restart"; id: string }
-  | { type: "remove"; ids: string[]; del: boolean }
+  | { type: "remove"; ids: string[] }
+  | { type: "delete"; id: string; scope: DeleteScope | null }
   | { type: "clearhist" };
 
 interface State {
@@ -50,6 +54,13 @@ interface State {
   structKey: string;
   /** Recent speed samples (bytes/s, ~1 per second) per download. */
   history: Map<string, { t: number; v: number[] }>;
+  /** Files, peers and trackers of the torrent shown in the details panel. */
+  tdetails: { id: string; data: TorrentDetails } | null;
+  trackersOpen: boolean;
+  /** A .torrent file is being dragged over the window. */
+  dragging: boolean;
+  /** Magnet details being fetched in the Add download dialog. */
+  probeId: string | null;
 }
 
 const S: State = {
@@ -76,6 +87,10 @@ const S: State = {
   maximized: false,
   structKey: "",
   history: new Map(),
+  tdetails: null,
+  trackersOpen: false,
+  dragging: false,
+  probeId: null,
 };
 
 const HISTORY_SAMPLES = 900; // 15 minutes at one sample per second
@@ -89,10 +104,14 @@ let elLayer: HTMLElement;
 
 function layout() {
   const W = window.innerWidth;
-  const docked = W >= 1200;
+  // The design docks the panel at 1200 px with a collapsed sidebar; the
+  // sidebar always stays expanded here, so dock only when the list keeps
+  // at least ~780 px.
+  const docked = W >= 1320;
   const detailsOpen = !!S.open && S.view !== "settings";
-  const rail = W < 1100 || (detailsOpen && docked && W < 1440);
-  const listW = W - (rail ? 56 : 200) - (detailsOpen && docked ? 340 : 0);
+  // The sidebar always stays expanded; the list gives up room instead.
+  const rail = false;
+  const listW = W - 200 - (detailsOpen && docked ? 340 : 0);
   return { W, docked, rail, listW, wide: listW >= 1000, narrow: listW < 900 };
 }
 
@@ -100,8 +119,16 @@ function currentList(): Item[] {
   return S.view === "settings" ? [] : visible(S.items, S.view, S.query);
 }
 
+/** Direct downloads using a download slot. */
 function activeCount() {
-  return S.items.filter((d) => d.status === "downloading" || d.status === "retrying").length;
+  return S.items.filter((d) => d.kind === "direct" && (d.status === "downloading" || d.status === "retrying")).length;
+}
+
+/** Anything transferring or about to, for Pause all. */
+function anyActive() {
+  return S.items.some((d) =>
+    ["downloading", "retrying", "connecting", "stalled", "checking", "fetching"].includes(d.status),
+  );
 }
 
 /* ---------------- rendering ---------------- */
@@ -166,13 +193,12 @@ function renderBody(resetScroll = false) {
 }
 
 function toolbar(L: ReturnType<typeof layout>): string {
-  const act = activeCount() > 0;
+  const act = anyActive();
   const hasPaused = S.items.some((d) => d.status === "paused");
   const resume = S.held || (!act && hasPaused);
   return toolbarHTML({
     query: S.query,
     narrow: L.narrow,
-    density: S.settings?.density ?? "comfortable",
     pauseLabel: resume ? "Resume all" : "Pause all",
     pauseDisabled: !act && !hasPaused && !S.held,
   });
@@ -202,6 +228,7 @@ function table(list: Item[], L: ReturnType<typeof layout>): string {
     queueView: S.view === "queued",
     compact,
     hasTextAction: L.wide && list.some((d) => d.status === "failed"),
+    torrents: list.some((d) => d.kind === "torrent"),
   };
   const first = S.focus && list.some((d) => d.id === S.focus) ? S.focus : list[0].id;
   const inline = !(S.open && L.docked);
@@ -223,13 +250,19 @@ function details(d: Item, overlay: boolean): string {
     free: S.free.get(d.folder) ?? null,
     maxConcurrent: S.settings?.maxConcurrent ?? 4,
     queueHeld: S.held,
+    torrent: S.tdetails?.id === d.id ? S.tdetails.data : null,
+    trackersOpen: S.trackersOpen,
+    maxActiveTorrents: S.settings?.maxActiveTorrents ?? 3,
   });
 }
 
 function statusbar(): string {
   const dl = S.items.filter((d) => d.status === "downloading");
   const dir = S.settings?.downloadDir ?? "";
+  const uploading = S.items.filter((d) => d.up != null);
   return statusbarHTML({
+    seeding: S.items.filter((d) => d.status === "seeding").length,
+    upSpeed: uploading.length ? uploading.reduce((a, d) => a + (d.up ?? 0), 0) : null,
     downloading: dl.length,
     retrying: S.items.filter((d) => d.status === "retrying").length,
     queued: S.items.filter((d) => d.status === "queued").length,
@@ -252,6 +285,8 @@ function renderLayer() {
     } else S.menu = null;
   }
   if (S.dialog) h += `<div class="fl-scrim" data-a="scrim">${dialogHTML(S.dialog)}</div>`;
+  else if (S.dragging)
+    h += `<div class="fl-dropzone" role="status">${icon("down", 32)}<b>Drop a .torrent file to add it</b></div>`;
   if (S.toast)
     h += `<div class="fl-tip fl-toast${S.toast.error ? " is-error" : ""}" role="${S.toast.error ? "alert" : "status"}">${esc(S.toast.text)}</div>`;
   elLayer.innerHTML = h;
@@ -285,8 +320,9 @@ function dialogHTML(g: Dialog): string {
       return addHTML(g.g, {
         slotsFull: activeCount() >= max,
         max,
-        queued: S.items.filter((d) => d.status === "queued").length,
+        queued: S.items.filter((d) => d.status === "queued" && d.kind === "direct").length,
         held: S.held,
+        dragging: S.dragging,
       });
     }
     case "restart": {
@@ -320,13 +356,17 @@ function dialogHTML(g: Dialog): string {
     }
     case "remove": {
       const items = g.ids.map((id) => S.byId.get(id)).filter((d): d is Item => !!d);
-      return items.length ? removeHTML(items, g.del) : "";
+      return items.length ? removeHTML(items) : "";
+    }
+    case "delete": {
+      const d = S.byId.get(g.id);
+      return d ? deleteHTML(d, g.scope) : "";
     }
     case "clearhist": {
       const n = S.items.filter(isFinished).length;
       return confirmHTML(
         `Clear ${n} completed ${plural(n, "entry", "entries")} from the list?`,
-        "<p>Completed and cancelled entries are removed from the list. <strong>Downloaded files stay on disk.</strong></p>",
+        "<p>Completed and cancelled entries are removed from the list. <strong>Downloaded files stay on disk.</strong> Torrents that are still seeding stay in the list.</p>",
         "Clear from list",
         "doclearhist",
         "Keep",
@@ -338,6 +378,34 @@ function dialogHTML(g: Dialog): string {
 function render() {
   renderBody();
   renderLayer();
+}
+
+/** Re-render only the details panel (keeps the list's hover and focus). */
+function renderDetails() {
+  const panel = root.querySelector(".fl-details");
+  const d = S.open ? S.byId.get(S.open) : undefined;
+  if (!panel || !d) return;
+  const scroll = panel.querySelector(".fl-dbody")?.scrollTop ?? 0;
+  const files = panel.querySelector(".fl-tfiles")?.scrollTop ?? 0;
+  panel.outerHTML = details(d, !layout().docked);
+  const fresh = root.querySelector(".fl-details");
+  const body = fresh?.querySelector(".fl-dbody");
+  if (body) body.scrollTop = scroll;
+  const list = fresh?.querySelector(".fl-tfiles");
+  if (list) list.scrollTop = files;
+}
+
+async function pollTorrentDetails() {
+  const d = S.open ? S.byId.get(S.open) : undefined;
+  if (!d || d.kind !== "torrent") return;
+  try {
+    const data = await api.torrentDetails(d.id);
+    if (S.open !== d.id) return;
+    S.tdetails = { id: d.id, data };
+    renderDetails();
+  } catch {
+    /* the torrent may have just been removed */
+  }
 }
 
 /**
@@ -402,6 +470,7 @@ function apply(snap: Snapshot) {
   S.held = snap.queueHeld;
   for (const id of [...S.sel]) if (!S.byId.has(id)) S.sel.delete(id);
   if (S.open && !S.byId.has(S.open)) S.open = null;
+  if (S.tdetails && S.tdetails.id !== S.open) S.tdetails = null;
   if (S.menu && !S.byId.has(S.menu.id)) S.menu = null;
   if (S.focus && !S.byId.has(S.focus)) S.focus = null;
   recordSpeeds(Date.now());
@@ -431,7 +500,11 @@ function patch() {
       set(`retry-${d.id}`, String(d.retryIn ?? 0));
       set(`retry2-${d.id}`, String(d.retryIn ?? 0));
     }
-    if (d.status !== "downloading") continue;
+    if (d.kind === "torrent" && d.up != null) {
+      set(`up-${d.id}`, fmtSpeed(d.up) || "0 KB/s");
+      set(`upd-${d.id}`, fmtSpeed(d.up) || "0 KB/s");
+    }
+    if (!["downloading", "connecting", "stalled", "checking"].includes(d.status)) continue;
     const p = pct(d.done, d.total);
     if (d.speed != null) {
       set(`speed-${d.id}`, fmtSpeed(d.speed));
@@ -458,6 +531,8 @@ function patch() {
   }
   const total = S.items.filter((d) => d.status === "downloading").reduce((a, d) => a + (d.speed ?? 0), 0);
   set("total-speed", fmtSpeed(total) || "0 KB/s");
+  const up = S.items.filter((d) => d.up != null).reduce((a, d) => a + (d.up ?? 0), 0);
+  set("total-up", fmtSpeed(up) || "0 KB/s");
   if (S.open && S.spark) {
     const el = root.querySelector(`[data-m="spark-${S.open}"]`);
     if (el) el.outerHTML = sparkHTML(S.open, sparkData(S.open));
@@ -526,8 +601,9 @@ async function run<T>(p: Promise<T>, ok?: string): Promise<T | undefined> {
 
 /* ---------------- add download ---------------- */
 
-function openAdd(url = "") {
+function openAdd(url = "", torrentFile?: string) {
   const folder = S.settings?.downloadDir ?? "";
+  cancelFetch();
   S.menu = null;
   S.dialog = {
     type: "add",
@@ -535,14 +611,112 @@ function openAdd(url = "") {
     g: {
       url, step: "idle", name: "", nameClash: false, size: null, resumable: false,
       folder, free: S.free.get(folder) ?? null, ask: !!S.settings?.askEachTime,
+      kind: "direct", fileLabel: "", preview: null, selected: new Set(), autoStart: false,
     },
   };
   renderLayer();
   const input = elLayer.querySelector<HTMLInputElement>("[data-url]");
   input?.focus();
-  if (url) checkLink_();
+  if (torrentFile) void openTorrentFile(torrentFile);
+  else if (url) checkLink_();
   else if (S.settings?.askEachTime) void browseAddFolder();
   void refreshFree(folder);
+}
+
+function newProbeId(): string {
+  return "p" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+/** Stop a magnet fetch started from the dialog, if any. */
+function cancelFetch() {
+  if (S.probeId) {
+    void api.cancelTorrentProbe(S.probeId).catch(() => {});
+    S.probeId = null;
+  }
+}
+
+async function fetchMagnet(dlg: Extract<Dialog, { type: "add" }>) {
+  const g = dlg.g;
+  cancelFetch();
+  const probeId = newProbeId();
+  S.probeId = probeId;
+  g.kind = "magnet";
+  g.step = "fetching";
+  g.preview = null;
+  renderLayer();
+  try {
+    const p = await api.probeTorrent({ type: "magnet", value: g.url.trim() }, probeId, g.folder);
+    if (S.dialog !== dlg || S.probeId !== probeId) return;
+    S.probeId = null;
+    if (g.autoStart) {
+      // Details arrived while "start automatically" was ticked: add it now.
+      g.preview = p;
+      g.selected = new Set(p.files.map((f) => f.index));
+      g.step = "preview";
+      return submitTorrent(false);
+    }
+    g.preview = p;
+    g.selected = new Set(p.files.map((f) => f.index));
+    g.step = "preview";
+  } catch (e) {
+    if (S.dialog !== dlg || S.probeId !== probeId) return;
+    S.probeId = null;
+    g.step = "error";
+    g.error = errorMessage(e);
+  }
+  renderLayer();
+}
+
+async function openTorrentFile(path: string) {
+  const dlg = S.dialog;
+  if (dlg?.type !== "add") return openAdd("", path);
+  const g = dlg.g;
+  cancelFetch();
+  g.kind = "file";
+  g.url = path;
+  g.fileLabel = path.split(/[\\/]/).pop() ?? path;
+  g.step = "reading";
+  g.preview = null;
+  renderLayer();
+  try {
+    const p = await api.probeTorrent({ type: "file", value: path }, newProbeId(), g.folder);
+    if (S.dialog !== dlg) return;
+    g.preview = p;
+    g.selected = new Set(p.files.map((f) => f.index));
+    g.step = "preview";
+  } catch (e) {
+    if (S.dialog !== dlg) return;
+    g.step = "error";
+    g.error = errorMessage(e);
+  }
+  renderLayer();
+}
+
+async function pickTorrentFile() {
+  const picked = await openDialog({ multiple: false, filters: [{ name: "Torrent files", extensions: ["torrent"] }], title: "Open a .torrent file" });
+  if (typeof picked === "string") await openTorrentFile(picked);
+}
+
+async function submitTorrent(paused: boolean) {
+  const dlg = S.dialog;
+  if (dlg?.type !== "add") return;
+  const g = dlg.g;
+  let req;
+  if (g.step === "preview" && g.preview) {
+    if (!g.selected.size) return;
+    const all = g.selected.size === g.preview.files.length;
+    req = { probeId: g.preview.probeId, destDir: g.folder, selected: all ? undefined : [...g.selected].sort((a, b) => a - b), startPaused: paused };
+  } else if (g.step === "fetching" && g.autoStart) {
+    cancelFetch();
+    req = { magnet: g.url.trim(), destDir: g.folder, startPaused: false };
+  } else return;
+  const v = await run(api.addTorrent(req));
+  if (!v) return;
+  S.dialog = null;
+  S.sel.clear();
+  S.focus = v.id;
+  renderLayer();
+  toast(req.magnet ? "Torrent added · it starts once its details arrive" : paused ? "Torrent added, paused" : "Torrent added");
 }
 
 let checkSeq = 0;
@@ -555,8 +729,12 @@ async function checkLink_() {
   window.clearTimeout(checkTimer);
   const seq = ++checkSeq;
   const kind = checkLink(g.url);
+  if (kind === "magnet") return fetchMagnet(dlg);
+  cancelFetch();
+  g.kind = "direct";
+  g.preview = null;
   if (kind === "empty" || kind === "typing") g.step = "idle";
-  else if (kind === "unsupported" || kind === "invalid") g.step = kind;
+  else if (kind === "invalid") g.step = kind;
   if (kind !== "ok") {
     renderLayer();
     return;
@@ -589,6 +767,8 @@ async function browseAddFolder() {
   renderLayer();
   void refreshFree(picked);
   if (dlg.g.step === "valid" && !dlg.nameEdited) void checkLink_();
+  // The name a torrent is saved as depends on the folder.
+  if (dlg.g.kind === "file" && dlg.g.step === "preview") void openTorrentFile(dlg.g.url);
 }
 
 async function submitAdd(queueFirst: boolean) {
@@ -616,6 +796,7 @@ async function pasteInto() {
       return;
     }
     dlg.g.url = text;
+    dlg.g.kind = "direct";
     void checkLink_();
   } catch {
     toast("Couldn’t read the clipboard. Paste with Ctrl+V instead.", true);
@@ -661,14 +842,95 @@ async function act(a: string, id: string | null, el: HTMLElement) {
     case "browse":
       return browseAddFolder();
     case "closedlg":
+      cancelFetch();
       S.dialog = null;
       return renderLayer();
     case "scrim":
       if (el === elLayer.querySelector(".fl-scrim")) {
+        cancelFetch();
         S.dialog = null;
         renderLayer();
       }
       return;
+    case "pickfile":
+      return pickTorrentFile();
+    case "cancelfetch": {
+      cancelFetch();
+      if (S.dialog?.type === "add") {
+        S.dialog.g.step = "idle";
+        S.dialog.g.kind = "direct";
+      }
+      return renderLayer();
+    }
+    case "autostart":
+      if (S.dialog?.type === "add") S.dialog.g.autoStart = !S.dialog.g.autoStart;
+      return renderLayer();
+    case "pfile":
+    case "pall":
+    case "pnone": {
+      if (S.dialog?.type !== "add" || !S.dialog.g.preview) return;
+      const g = S.dialog.g;
+      if (a === "pall") g.selected = new Set(g.preview!.files.map((f) => f.index));
+      else if (a === "pnone") g.selected = new Set();
+      else {
+        const i = Number(el.dataset.i);
+        if (g.selected.has(i)) g.selected.delete(i);
+        else g.selected.add(i);
+      }
+      const scroll = elLayer.querySelector(".fl-tfiles")?.scrollTop ?? 0;
+      renderLayer();
+      const list = elLayer.querySelector(".fl-tfiles");
+      if (list) list.scrollTop = scroll;
+      elLayer.querySelector<HTMLElement>(a === "pfile" ? `[data-a="pfile"][data-i="${el.dataset.i}"]` : "[data-a=pall],[data-a=pnone]")?.focus();
+      return;
+    }
+    case "tadd":
+      return submitTorrent(false);
+    case "taddpaused":
+      return submitTorrent(true);
+    case "recheck":
+      return void run(api.recheck(id!), "Checking files…");
+    case "trackers":
+      S.trackersOpen = !S.trackersOpen;
+      return renderDetails();
+    case "tfile": {
+      const t = S.tdetails?.id === id ? S.tdetails.data : null;
+      if (!t) return;
+      const i = Number(el.dataset.i);
+      const next = new Set(t.files.filter((f) => f.selected).map((f) => f.index));
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      if (!next.size) return toast("At least one file must stay selected.", true);
+      for (const f of t.files) f.selected = next.has(f.index);
+      renderDetails();
+      await run(api.setTorrentFiles(id!, [...next].sort((x, y) => x - y)));
+      return void pollTorrentDetails();
+    }
+    case "delete": {
+      const dlg: Dialog = { type: "delete", id: id!, scope: null };
+      S.dialog = dlg;
+      renderLayer();
+      try {
+        const scope = await api.deleteScope(id!);
+        if (S.dialog === dlg) {
+          dlg.scope = scope;
+          renderLayer();
+        }
+      } catch (e) {
+        S.dialog = null;
+        renderLayer();
+        toast(errorMessage(e), true);
+      }
+      return;
+    }
+    case "dodelete": {
+      if (S.dialog?.type !== "delete") return;
+      const target = S.dialog.id;
+      S.dialog = null;
+      renderLayer();
+      await run(api.remove(target, true), "Files moved to the Recycle Bin");
+      return;
+    }
     case "dodownload":
       return submitAdd(true);
     case "addqueue":
@@ -705,17 +967,15 @@ async function act(a: string, id: string | null, el: HTMLElement) {
       return;
     }
     case "remove":
-      S.dialog = { type: "remove", ids: [id!], del: false };
+      S.dialog = { type: "remove", ids: [id!] };
       return renderLayer();
     case "selremove":
-      S.dialog = { type: "remove", ids: [...S.sel], del: false };
-      return renderLayer();
-    case "togdel":
-      if (S.dialog?.type === "remove") S.dialog.del = !S.dialog.del;
+      S.dialog = { type: "remove", ids: [...S.sel] };
       return renderLayer();
     case "doremove": {
       if (S.dialog?.type !== "remove") return;
-      const { ids, del } = S.dialog;
+      const { ids } = S.dialog;
+      const del = false;
       S.dialog = null;
       renderLayer();
       let failed = 0;
@@ -747,7 +1007,7 @@ async function act(a: string, id: string | null, el: HTMLElement) {
     case "openfolder":
       return void run(api.showInFolder(id!));
     case "copylink":
-      return void run(api.copySourceUrl(id!), "Full link copied");
+      return void run(api.copySourceUrl(id!), d?.kind === "torrent" ? "Magnet link copied" : "Full link copied");
     case "reveal":
       if (S.revealed?.id === id) S.revealed = null;
       else {
@@ -762,7 +1022,8 @@ async function act(a: string, id: string | null, el: HTMLElement) {
       S.open = id;
       S.revealed = null;
       void refreshFree();
-      return renderBody();
+      renderBody();
+      return void pollTorrentDetails();
     case "closepanel":
       S.open = null;
       return renderBody();
@@ -777,11 +1038,13 @@ async function act(a: string, id: string | null, el: HTMLElement) {
       return void run(api.move(id!, (a === "downq" ? "down" : a) as QueueMove));
 
     case "pauseall": {
-      const resume = S.held || (activeCount() === 0 && S.items.some((x) => x.status === "paused"));
+      const resume = S.held || (!anyActive() && S.items.some((x) => x.status === "paused"));
       return void run(resume ? api.resumeAll() : api.pauseAll());
     }
     case "selpause":
-      for (const x of selected()) if ((x.status === "downloading" && x.canPause) || x.status === "retrying") await run(api.pause(x.id));
+      for (const x of selected())
+        if (["downloading", "connecting", "stalled", "checking", "fetching"].includes(x.status) ? x.canPause : x.status === "retrying")
+          await run(api.pause(x.id));
       return;
     case "selresume":
       for (const x of selected()) {
@@ -793,7 +1056,7 @@ async function act(a: string, id: string | null, el: HTMLElement) {
       for (const x of selected()) if (x.status === "failed" && x.errorKind !== "cannotResume") await run(api.retryNow(x.id));
       return;
     case "seltop": {
-      const q = selected().filter((x) => x.status === "queued").sort((p, n) => (n.pos ?? 0) - (p.pos ?? 0));
+      const q = selected().filter((x) => x.status === "queued" && x.kind === "direct").sort((p, n) => (n.pos ?? 0) - (p.pos ?? 0));
       for (const x of q) await run(api.move(x.id, "top"));
       return;
     }
@@ -829,7 +1092,8 @@ async function act(a: string, id: string | null, el: HTMLElement) {
       if (!S.settings) return;
       const k = el.dataset.k as keyof Settings;
       const cur = Number(S.settings[k]);
-      return updateSettings({ [k]: cur + Number(el.dataset.d) } as Partial<Settings>);
+      const next = Math.min(Number(el.dataset.max ?? Infinity), Math.max(Number(el.dataset.min ?? 0), cur + Number(el.dataset.d)));
+      return updateSettings({ [k]: next } as Partial<Settings>);
     }
   }
   void d;
@@ -954,8 +1218,10 @@ function onClick(e: MouseEvent) {
     S.menu = null;
     renderLayer();
   }
-  if (S.open !== openBefore) renderBody();
-  else syncSelection();
+  if (S.open !== openBefore) {
+    renderBody();
+    void pollTorrentDetails();
+  } else syncSelection();
 }
 
 function onDblClick(e: MouseEvent) {
@@ -965,11 +1231,12 @@ function onDblClick(e: MouseEvent) {
   if (!r) return;
   const d = S.byId.get(r.dataset.row!);
   if (!d) return;
-  if (d.status === "completed") void run(api.openFile(d.id));
+  if (isComplete(d)) void run(api.openFile(d.id));
   else {
     S.open = d.id;
     S.revealed = null;
     renderBody();
+    void pollTorrentDetails();
   }
 }
 
@@ -981,6 +1248,7 @@ function onInput(e: Event) {
     renderBody();
   } else if (t.hasAttribute("data-url") && S.dialog?.type === "add") {
     S.dialog.g.url = t.value;
+    if (S.dialog.g.kind === "file") S.dialog.g.kind = "direct";
     window.clearTimeout(checkTimer);
     checkTimer = window.setTimeout(() => void checkLink_(), 350);
   } else if (t.hasAttribute("data-name") && S.dialog?.type === "add") {
@@ -993,7 +1261,7 @@ function onChange(e: Event) {
   const t = e.target as HTMLInputElement;
   if (t.dataset.numk && S.settings) {
     const k = t.dataset.numk as keyof Settings;
-    const n = Math.round(Number(t.value));
+    const n = Math.round(Number(t.value.replace(",", ".")) * Number(t.dataset.scale ?? 1));
     const v = Number.isFinite(n) ? Math.min(Number(t.dataset.max), Math.max(Number(t.dataset.min), n)) : Number(S.settings[k]);
     void updateSettings({ [k]: v } as Partial<Settings>);
   }
@@ -1017,11 +1285,15 @@ function onKeyDown(e: KeyboardEvent) {
   }
   if (S.dialog) {
     if (e.key === "Escape") {
+      cancelFetch();
       S.dialog = null;
       renderLayer();
     } else if (e.key === "Enter" && S.dialog.type === "add" && S.dialog.g.step === "valid") {
       e.preventDefault();
       void submitAdd(true);
+    } else if (e.key === "Enter" && S.dialog.type === "add" && S.dialog.g.step === "preview" && (e.target as HTMLElement).tagName === "INPUT") {
+      e.preventDefault();
+      void submitTorrent(false);
     } else if (e.key === "Tab") trapFocus(e);
     return;
   }
@@ -1109,11 +1381,12 @@ function onKeyDown(e: KeyboardEvent) {
       }
       return;
     case "Enter":
-      if (d.status === "completed") void run(api.openFile(id));
+      if (isComplete(d)) void run(api.openFile(id));
       else {
         S.open = id;
         renderBody();
         focusRow(id);
+        void pollTorrentDetails();
       }
       return;
     case "i":
@@ -1122,6 +1395,7 @@ function onKeyDown(e: KeyboardEvent) {
         S.open = id;
         renderBody();
         focusRow(id);
+        void pollTorrentDetails();
       }
       return;
     case "Delete":
@@ -1193,6 +1467,49 @@ function onPointerDown(e: PointerEvent) {
   if (g && e.button === 0) startDrag(g.dataset.grip!, e);
 }
 
+/* ---------------- drop a .torrent file ---------------- */
+
+function setDragging(on: boolean) {
+  if (S.dragging === on) return;
+  S.dragging = on;
+  renderLayer();
+}
+
+function droppedTorrent(paths: string[]): string | undefined {
+  return paths.find((p) => /\.torrent$/i.test(p));
+}
+
+async function listenForDrops() {
+  if ("__TAURI_INTERNALS__" in window && !(window as unknown as { __FL_PREVIEW__?: boolean }).__FL_PREVIEW__) {
+    await getCurrentWebview().onDragDropEvent((ev) => {
+      const p = ev.payload;
+      if (p.type === "enter") setDragging(!!droppedTorrent(p.paths));
+      else if (p.type === "leave") setDragging(false);
+      else if (p.type === "drop") {
+        setDragging(false);
+        const file = droppedTorrent(p.paths);
+        if (file) void openTorrentFile(file);
+        else if (p.paths.length) toast("Only .torrent files can be dropped here.", true);
+      }
+    });
+    return;
+  }
+  // Browser preview: HTML drag and drop (file names only).
+  window.addEventListener("dragover", (e) => {
+    e.preventDefault();
+    setDragging(true);
+  });
+  window.addEventListener("dragleave", (e) => {
+    if (!e.relatedTarget) setDragging(false);
+  });
+  window.addEventListener("drop", (e) => {
+    e.preventDefault();
+    setDragging(false);
+    const name = Array.from(e.dataTransfer?.files ?? []).map((f) => f.name).find((n) => /\.torrent$/i.test(n));
+    if (name) void openTorrentFile(name);
+  });
+}
+
 /* ---------------- start ---------------- */
 
 export async function start(el: HTMLElement) {
@@ -1235,6 +1552,8 @@ export async function start(el: HTMLElement) {
     apply(await api.list());
     void refreshFree();
     window.setInterval(() => void refreshFree(), 15_000);
+    window.setInterval(() => void pollTorrentDetails(), 1500);
+    void listenForDrops();
   } catch (e) {
     S.loadError = errorMessage(e) || "The download engine didn’t respond.";
     if (errorKind(e) == null && !("__TAURI_INTERNALS__" in window))
