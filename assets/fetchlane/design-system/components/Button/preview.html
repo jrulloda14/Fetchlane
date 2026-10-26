@@ -1,0 +1,23 @@
+<!-- @dsCard group="Actions" height=330 subtitle="Primary, secondary, subtle, danger · every state" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Button</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+ 
+<div><div class="fl-sheet-label">VARIANTS</div><div class="fl-sheet-row" id="v"></div></div>
+<div><div class="fl-sheet-label">STATES — SECONDARY / PRIMARY</div><div class="fl-sheet-row" id="s"></div><div class="fl-sheet-row" id="s2" style="margin-top:8px"></div></div>
+<div><div class="fl-sheet-label">ICON BUTTONS (ROW ACTIONS) — REST · HOVER · FOCUS · DISABLED</div><div class="fl-sheet-row" id="ib"></div></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+function B(c,ic,t,x){return '<button class="fl-btn '+(c||'')+'" '+(x||'')+'>'+(ic?I(ic):'')+t+'</button>';}
+document.getElementById('v').innerHTML = B('fl-btn-primary','plus','Add download')+B('','pause','Pause all')+B('fl-btn-subtle','x','Clear selection')+B('','stop','Cancel…')+B('fl-btn-danger-fill','','Delete partial and restart');
+var st=[['','Rest'],['is-hover','Hover'],['is-active','Pressed'],['is-focus','Focus'],['','Disabled','disabled'],['is-loading','Loading']];
+document.getElementById('s').innerHTML = st.map(function(x){return B(x[0],x[1]==='Loading'?null:'folder',x[1]==='Loading'?'<svg class="fl-i fl-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 1-8.5 8.5"/></svg>Checking':'Browse…',x[2]);}).join('');
+document.getElementById('s2').innerHTML = st.map(function(x){return B('fl-btn-primary '+x[0],x[1]==='Loading'?null:'down',x[1]==='Loading'?'<svg class="fl-i fl-spin" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 1-8.5 8.5"/></svg>Download':'Download',x[2]);}).join('');
+document.getElementById('ib').innerHTML = ['','is-hover','is-focus'].map(function(c){return '<button class="fl-ibtn '+c+'" aria-label="Pause">'+I('pause')+'</button><button class="fl-ibtn '+c+'" aria-label="More">'+I('more')+'</button>';}).join('<span style="width:12px"></span>')+'<span style="width:12px"></span><button class="fl-ibtn" disabled aria-label="Move up">'+I('arrowUp')+'</button>';
+</script>
+</body>
+</html>

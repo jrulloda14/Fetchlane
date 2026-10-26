@@ -1,0 +1,15 @@
+<!-- @dsCard group="List" height=170 subtitle="Subtle page glyphs by extension · 20 px comfortable, 16 px compact, 32 px panel" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>FileTypeIcon</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+<div class="fl-sheet-row" id="f" style="gap:22px"></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+document.getElementById('f').innerHTML=['a.iso','a.zip','a.msi','a.mp4','a.wav','a.png','a.pdf','a.csv','a.bin'].map(function(n){return '<div style="display:flex;flex-direction:column;align-items:center;gap:6px">'+F.fileIcon(n,32)+F.fileIcon(n)+'<span class="fl-muted" style="font-size:11px">.'+n.split('.')[1]+'</span></div>';}).join('');
+</script>
+</body>
+</html>

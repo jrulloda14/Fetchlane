@@ -1,0 +1,19 @@
+<!-- @dsCard group="List" height=560 width=1080 subtitle="Table header + one row per state · comfortable 48 px" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>DownloadRow</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+<div id="t" style="width:1040px"></div><div id="t2" style="width:1040px"></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+var S=F.sample(), pick=function(id){return S.filter(function(d){return d.id===id;})[0];};
+var cols=F.colsFor({wide:true,hasTextAction:true});
+var rows=[['ubuntu',{}],['nightly',{hover:true}],['sentinel',{}],['obs',{selected:true,anySel:true}],['libre',{focus:true}],['vhdx',{}],['keynote',{}],['c4',{}],['y2',{}]];
+document.getElementById('t').innerHTML='<div class="fl-table" style="padding:0;overflow:visible;--fl-cols:'+cols+'">'+F.theadHTML({wide:true})+rows.map(function(r){var o=r[1];o.wide=true;return F.rowHTML(pick(r[0]),o);}).join('')+'</div>'+
+ '<div class="fl-note" style="margin-top:10px">Rows 2, 4 and 5 show hover, selected and keyboard focus. Actions appear on hover, focus or selection; a failed row always shows its recovery action as a labelled button.</div>';
+</script>
+</body>
+</html>

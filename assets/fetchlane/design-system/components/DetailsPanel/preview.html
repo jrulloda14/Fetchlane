@@ -1,0 +1,17 @@
+<!-- @dsCard group="Panels" height=720 width=1440 subtitle="Right panel, 340 px · queued, paused and size-unknown states, speed history expanded" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>DetailsPanel</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+<div style="display:flex;gap:16px;align-items:stretch;height:690px" id="p"></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+var S=F.sample(), pick=function(id){return S.filter(function(d){return d.id===id;})[0];};
+document.getElementById('p').innerHTML=F.detailsHTML(pick('podcast'),{})+F.detailsHTML(pick('obs'),{})+F.detailsHTML(pick('nightly'),{})+F.detailsHTML(pick('blender'),{spark:true});
+Array.prototype.forEach.call(document.querySelectorAll('.fl-details'),function(e){e.style.border='1px solid var(--border-subtle)';e.style.borderRadius='8px';e.style.overflow='hidden';});
+</script>
+</body>
+</html>

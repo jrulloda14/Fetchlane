@@ -1,0 +1,14 @@
+<!-- @dsCard group="Screens" height=800 width=1280 subtitle="Server can’t resume · restarting discards partial progress, so it asks first" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>RestartConfirm</title>
+<style>body{margin:0;background:var(--surface-000);overflow:hidden}#app{width:1280px;height:800px}</style></head>
+<body>
+<div id="app"></div>
+<script>
+var app = Fetchlane.mountApp(document.getElementById('app'), {width:1280,height:800,interactive:true,view:'failed',open:'keynote',sel:['keynote'],dialog:{type:'restart',id:'keynote'}});
+Fetchlane.fit(document.getElementById('app'), 1280);
+
+</script>
+</body>
+</html>

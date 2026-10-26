@@ -1,0 +1,17 @@
+<!-- @dsCard group="List" height=300 width=1080 subtitle="Compact density · 32 px rows, bar before label, hostname in tooltip" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>DownloadRowCompact</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+<div id="t" style="width:1040px"></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+var S=F.sample(), pick=function(id){return S.filter(function(d){return d.id===id;})[0];};
+var cols=F.colsFor({wide:true,hasTextAction:true});
+document.getElementById('t').innerHTML='<div class="fl-table fl-compact" style="padding:0;overflow:visible;--fl-cols:'+cols+'">'+F.theadHTML({wide:true})+['ubuntu','sentinel','obs','podcast','fonts','c1','c2'].map(function(id,i){return F.rowHTML(pick(id),{wide:true,compact:true,hover:i===1,selected:i===2,anySel:true});}).join('')+'</div>';
+</script>
+</body>
+</html>

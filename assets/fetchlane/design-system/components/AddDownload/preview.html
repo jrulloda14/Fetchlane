@@ -1,0 +1,14 @@
+<!-- @dsCard group="Screens" height=800 width=1280 subtitle="Add download dialog · link checked, ready to download · type or press Paste to try validation" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>AddDownload</title>
+<style>body{margin:0;background:var(--surface-000);overflow:hidden}#app{width:1280px;height:800px}</style></head>
+<body>
+<div id="app"></div>
+<script>
+var app = Fetchlane.mountApp(document.getElementById('app'), {width:1280,height:800,interactive:true,dialog:{type:'add',step:'valid',url:'https://download.kdenlive.org/stable/25.08.2/kdenlive-25.08.2.exe',file:'kdenlive-25.08.2.exe',size:123731968,exists:true}});
+Fetchlane.fit(document.getElementById('app'), 1280);
+
+</script>
+</body>
+</html>

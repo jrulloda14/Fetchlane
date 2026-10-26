@@ -1,0 +1,27 @@
+[package]
+name = "fetchlane-engine"
+description = "Download engine for the Fetchlane download manager"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+
+[dependencies]
+dirs = "6"
+fastrand = "2"
+fs4 = "0.13"
+percent-encoding = "2"
+reqwest = { version = "0.13", default-features = false, features = ["rustls", "http2", "system-proxy"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt", "fs", "io-util", "time", "sync", "macros"] }
+tokio-util = "0.7"
+tracing = "0.1"
+trash = "5"
+url = "2"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["full"] }

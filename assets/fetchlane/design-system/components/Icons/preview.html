@@ -1,0 +1,15 @@
+<!-- @dsCard group="Foundations" height=300 subtitle="Line icons · 24-unit grid, 1.6 stroke, drawn at 16 px in currentColor" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Icons</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+<div id="g" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:4px"></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+document.getElementById('g').innerHTML = Object.keys(F.icons).filter(function(k){return F.icons[k];}).map(function(k){return '<div style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:4px;color:var(--ink)">'+I(k)+'<span class="fl-muted" style="font-size:11px">'+k+'</span></div>';}).join('');
+</script>
+</body>
+</html>

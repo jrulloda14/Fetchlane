@@ -1,0 +1,18 @@
+<!-- @dsCard group="List" height=220 width=1040 subtitle="Replaces the list heading while rows are selected · counts show the scope of each action" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>SelectionToolbar</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+<div id="a" style="width:1000px;display:flex;flex-direction:column;gap:14px"></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+function bar(n, all, b){return '<div class="fl-selbar" style="margin:0"><button class="fl-check" role="checkbox" aria-checked="'+(all?'true':'mixed')+'">'+I(all?'check':'minus',12)+'</button><span class="fl-selcount">'+n+' selected</span>'+b+'<div class="fl-vsep"></div><button class="fl-btn">'+I('remove')+'Remove from list… <span class="fl-n">'+n+'</span></button><div style="flex:1"></div><button class="fl-btn fl-btn-subtle">'+I('x')+'Clear selection</button></div>';}
+function B(ic,t,c){return '<button class="fl-btn"'+(c?'':' disabled')+'>'+I(ic)+t+' <span class="fl-n">'+c+'</span></button>';}
+document.getElementById('a').innerHTML = bar(3,false,B('pause','Pause',1)+B('play','Resume',2)+B('retry','Retry',0)+B('toTop','Move to top',1)) + bar(3,true,B('pause','Pause',0)+B('play','Resume',0)+B('retry','Retry',2)) +
+ '<p class="fl-note" style="margin:0">Each button acts only on the selected rows it applies to; the number is how many. A zero disables it. Removing always opens the confirmation. Esc clears the selection.</p>';
+</script>
+</body>
+</html>

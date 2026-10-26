@@ -1,0 +1,1 @@
+Removing three completed entries. The default removes list entries only and keeps the files; ticking the box switches the button to the destructive "Remove and delete files" and sends files to the Recycle Bin.

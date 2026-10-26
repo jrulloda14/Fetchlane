@@ -1,0 +1,1 @@
+The server can't resume, so the only recovery is to start over. Restart download… opens this confirmation; the safe choice "Keep partial file" is focused, and the destructive button names exactly what it does.

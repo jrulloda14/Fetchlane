@@ -1,0 +1,21 @@
+<!-- @dsCard group="Inputs" height=250 subtitle="Checkbox, toggle, segmented control, number box" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>SelectionControls</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+
+<div style="display:grid;grid-template-columns:repeat(4,auto);gap:12px 40px;justify-content:start;align-items:start" id="c"></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+var ck=function(s,c,d){return '<span style="display:inline-flex;align-items:center;gap:8px;'+(d?'opacity:.45':'')+'"><button class="fl-check '+(c||'')+'" role="checkbox" aria-checked="'+s+'">'+I(s==='mixed'?'minus':'check',12)+'</button><span style="font-size:13px">'+(s==='true'?'Checked':s==='mixed'?'Some selected':'Unchecked')+(c?' · focus':'')+(d?' · disabled':'')+'</span></span>';};
+document.getElementById('c').innerHTML =
+ '<div><div class="fl-sheet-label">CHECKBOX</div><div style="display:flex;flex-direction:column;gap:10px">'+ck('false')+ck('true')+ck('mixed')+ck('false','is-focus')+ck('true','',1)+'</div></div>'+
+ '<div><div class="fl-sheet-label">TOGGLE</div><div style="display:flex;flex-direction:column;gap:12px"><span style="display:flex;gap:10px;align-items:center"><button class="fl-toggle" role="switch" aria-checked="false"></button>Off</span><span style="display:flex;gap:10px;align-items:center"><button class="fl-toggle" role="switch" aria-checked="true"></button>On</span><span style="display:flex;gap:10px;align-items:center"><button class="fl-toggle is-focus" role="switch" aria-checked="true"></button>Focus</span></div></div>'+
+ '<div><div class="fl-sheet-label">SEGMENTED (SINGLE CHOICE)</div><div style="display:flex;flex-direction:column;gap:12px"><div class="fl-seg" role="radiogroup"><button role="radio" aria-checked="true">System</button><button role="radio" aria-checked="false">Light</button><button role="radio" aria-checked="false">Dark</button></div><div class="fl-seg" role="radiogroup"><button role="radio" aria-checked="false">'+I('comfortable',14)+'Comfortable</button><button role="radio" aria-checked="true">'+I('compact',14)+'Compact</button></div></div></div>'+
+ '<div><div class="fl-sheet-label">NUMBER BOX (1–10)</div><div style="display:flex;flex-direction:column;align-items:flex-start;gap:12px"><div class="fl-num-box"><button aria-label="Fewer">'+I('minus',14)+'</button><input value="4"><button aria-label="More">'+I('plus',14)+'</button></div><div class="fl-num-box"><button aria-label="Fewer">'+I('minus',14)+'</button><input value="10"><button aria-label="More" disabled>'+I('plus',14)+'</button></div><span class="fl-subtle" style="font-size:12px">At the limit the step button disables.</span></div></div>';
+</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+<!-- @dsCard group="Navigation" height=230 subtitle="Title bar (32 px) and status bar (28 px)" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>WindowChrome</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+<div id="w" style="width:1000px;display:flex;flex-direction:column;gap:16px"></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+var tb='<div class="fl-titlebar" style="border:1px solid var(--border-subtle);border-radius:8px;overflow:hidden"><div class="fl-brand">'+F.mark(16)+'<span>Fetchlane</span></div><div class="fl-caption"><button aria-label="Minimize">'+I('minimize')+'</button><button aria-label="Maximize">'+I('maximize')+'</button><button class="close" aria-label="Close" style="background:var(--caption-close);color:#fff">'+I('close')+'</button></div></div>';
+var sb=function(p){return '<div class="fl-statusbar" style="border:1px solid var(--border-subtle);border-radius:8px">'+(p?'<span class="fl-sb">'+I('pause',12)+'<b>All paused</b> · queue on hold</span>':'<span class="fl-sb">'+I('down',12)+'<b>3</b> downloading · <b>1</b> retrying</span><span class="fl-sb"><b>17.6 MB/s</b> total</span>')+'<span class="fl-sb">'+I('clock',12)+'<b>4</b> queued</span><span class="fl-grow"></span><span class="fl-sb">'+I('drive',12)+'D: 6.10 GB free</span><button class="fl-link">4 at a time</button></div>';};
+document.getElementById('w').innerHTML=tb+sb(false)+sb(true)+'<p class="fl-note" style="margin:0">Title bar: mark + name only, no menus. Caption buttons follow Windows (46 × 32, red close on hover). Status bar is the unobtrusive summary: active count, total speed, queued count, free space on the default drive, and a link to the simultaneous-download limit.</p>';
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!-- @dsCard group="Inputs" height=420 subtitle="Link field validation states, search, path field" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>TextField</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px 28px;max-width:960px" id="f"></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+function field(cls, val, hint, extra){return '<div class="fl-field"><label class="fl-label">Link</label><div class="fl-input-row"><div class="fl-input is-mono '+cls+'">'+I('link')+'<input value="'+val+'" placeholder="https://example.com/file.zip" '+(extra||'')+'>'+(cls.indexOf('busy')>=0?'<svg class="fl-i fl-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 1-8.5 8.5"/></svg>':'')+'</div><button class="fl-btn">'+I('paste')+'Paste</button></div>'+hint+'</div>';}
+document.getElementById('f').innerHTML =
+ field('', '', '<div class="fl-hint">Paste a link that starts with http:// or https://</div>') +
+ field('is-focus busy', 'https://download.kdenlive.org/stable/25.08.2/kdenlive-25.08.2.exe', '<div class="fl-hint is-busy">'+I('spinner',12,'fl-spin')+'Checking link with download.kdenlive.org…</div>') +
+ field('', 'https://download.kdenlive.org/stable/25.08.2/kdenlive-25.08.2.exe', '<div class="fl-hint is-ok">'+I('check',12)+'<span>Found kdenlive-25.08.2.exe · 118 MB · can resume</span></div>') +
+ field('is-error', 'downloads/kdenlive.exe', '<div class="fl-hint is-error">'+I('alert',12)+'<span>That doesn’t look like a web link. Check it starts with http:// or https://</span></div>', 'aria-invalid="true"') +
+ field('is-error', 'magnet:?xt=urn:btih:c9e15763f722f23e98a29decdfae341b98d53056', '<div class="fl-hint is-error">'+I('alert',12)+'<span>Fetchlane downloads HTTP and HTTPS links. Magnet and torrent links aren’t supported.</span></div>') +
+ field('is-error', 'https://files.example.org/missing/report.pdf', '<div class="fl-hint is-error">'+I('alert',12)+'<span>The server says this file doesn’t exist (404). Check the link, or ask whoever shared it for a new one.</span></div>') +
+ '<div class="fl-field"><label class="fl-label">Search</label><div class="fl-input fl-search" style="width:100%">'+I('search')+'<input placeholder="Search downloads"><span class="fl-kbd">Ctrl+F</span></div></div>' +
+ '<div class="fl-field"><label class="fl-label">File name — disabled until the link is checked</label><div class="fl-input is-disabled">'+I('open')+'<input disabled placeholder="Filled in from the link"></div></div>';
+</script>
+</body>
+</html>

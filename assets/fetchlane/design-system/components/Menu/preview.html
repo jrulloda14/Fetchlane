@@ -1,0 +1,16 @@
+<!-- @dsCard group="Overlays" height=380 subtitle="Row overflow menus · contents depend on state" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Menu</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+<div style="display:flex;gap:20px;align-items:flex-start;position:relative" id="m"></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+var S=F.sample(), pick=function(id){return S.filter(function(d){return d.id===id;})[0];};
+document.getElementById('m').innerHTML=['ubuntu','podcast','c4'].map(function(id,i){var d=pick(id);return '<div><div class="fl-sheet-label">'+d.status.toUpperCase()+'</div><div class="fl-menu" role="menu" style="position:static">'+F.menuItems(d).replace('class="fl-mi"','class="fl-mi is-hover"')+'</div></div>';}).join('');
+</script>
+</body>
+</html>

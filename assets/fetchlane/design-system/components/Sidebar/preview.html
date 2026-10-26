@@ -1,0 +1,17 @@
+<!-- @dsCard group="Navigation" height=440 subtitle="200 px with labels and counts · 56 px rail below 1100 px or when details are docked under 1440 px" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Sidebar</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+<div style="display:flex;gap:32px;align-items:stretch" id="s"></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+function nav(rail){var v=[['all','All downloads',39,1],['active','Active',5],['queue','Queued',4],['done','Completed',26],['failed','Failed',3]];
+ return '<nav class="fl-sidebar'+(rail?' is-rail':'')+'" style="height:380px;border-radius:8px;border:1px solid var(--border-subtle)">'+v.map(function(x,i){return '<button class="fl-nav'+(i===2&&!rail?' is-focus':'')+'"'+(x[3]?' aria-current="page"':'')+' style="'+(i===1&&!rail?'background:var(--surface-hover)':'')+'">'+I(x[0])+'<span class="fl-nav-label">'+x[1]+'</span><span class="fl-count'+(x[0]==='failed'?' is-alert':'')+'">'+x[2]+'</span></button>';}).join('')+'<div class="fl-spacer"></div><div class="fl-sidebar-sep"></div><button class="fl-nav">'+I('sliders')+'<span class="fl-nav-label">Settings</span></button></nav>';}
+document.getElementById('s').innerHTML=nav(false)+nav(true)+'<div class="fl-note" style="max-width:340px">Current list: <code>surface-selected</code> + 3 px <code>accent</code> bar + bold label. Hover (Active) and keyboard focus (Queued) shown. The Failed count turns <code>status-error</code> and bold when it is above zero; it is still a number, not a dot. In the rail, counts sit under the icon and the label moves to the tooltip and accessible name.</div>';
+</script>
+</body>
+</html>

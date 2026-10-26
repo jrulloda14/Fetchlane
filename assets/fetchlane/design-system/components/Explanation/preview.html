@@ -1,0 +1,24 @@
+<!-- @dsCard group="Status" height=360 subtitle="Plain-language status and error blocks for the details panel" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Explanation</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+
+<div style="display:grid;grid-template-columns:repeat(3,minmax(0,300px));gap:16px" id="e"></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+var d=document.createElement('div'), U=F.units;
+var items=[
+ {id:'s',name:'a.tif',host:'data.openearth-archive.org',url:'https://x',status:'retrying',retryIn:8,attempt:2,maxAttempts:5,done:1.02*U.GB,total:2.4*U.GB},
+ {id:'f',name:'a.zip',host:'assets.typecrate.net',url:'https://x',status:'failed',reason:'conn',maxAttempts:5,done:21.6*U.MB,total:88*U.MB},
+ {id:'v',name:'a.vhdx',host:'files.northgate-it.net',url:'https://x',status:'failed',reason:'disk',drive:'D:',need:15.3*U.GB,free:6.1*U.GB,done:2.9*U.GB,total:18.2*U.GB},
+ {id:'k',name:'a.mp4',host:'media.summitstream.io',url:'https://x',status:'failed',reason:'noresume',done:412*U.MB,total:1.2*U.GB},
+ {id:'p',name:'a.exe',host:'x',url:'https://x',status:'paused',done:58.9*U.MB,total:154*U.MB},
+ {id:'c',name:'a.zip',host:'x',url:'https://x',status:'completed',at:'10:58',day:'today',elapsed:252,total:2.3*U.GB,done:2.3*U.GB}];
+document.getElementById('e').innerHTML = items.map(function(x){var h=F.detailsHTML(x,{}); var m=/<div class="fl-explain[\s\S]*?<\/div><\/div>/.exec(h); return m?m[0]:'';}).join('');
+</script>
+</body>
+</html>

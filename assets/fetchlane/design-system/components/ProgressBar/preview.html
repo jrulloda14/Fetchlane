@@ -1,0 +1,23 @@
+<!-- @dsCard group="Status" height=300 subtitle="4 px in rows, 6 px in the details panel" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>ProgressBar</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+
+<div style="display:grid;grid-template-columns:200px 240px 1fr;gap:14px 20px;align-items:center;max-width:860px" id="p"></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+var U=F.units, rows=[
+ ['Downloading',{id:'a',status:'downloading',done:62,total:100},'progress-fill (accent)'],
+ ['Size unknown',{id:'b',status:'downloading',done:5,total:null},'indeterminate sweep; static half-bar with reduced motion'],
+ ['Paused',{id:'c',status:'paused',done:38,total:100},'progress-paused keeps position, drops colour'],
+ ['Retrying',{id:'d',status:'retrying',done:42,total:100},'dashed progress-retry — "waiting", not moving'],
+ ['Failed',{id:'e',status:'failed',done:15,total:100},'progress-error shows how much partial data is kept'],
+ ['Details panel',{id:'f',status:'downloading',done:62,total:100},'6 px, same rules', true]];
+document.getElementById('p').innerHTML = rows.map(function(r){return '<span style="font-size:13px">'+r[0]+'</span>'+F.barHTML(r[1], r[3])+'<span class="fl-subtle" style="font-size:12px">'+r[2]+'</span>';}).join('');
+</script>
+</body>
+</html>

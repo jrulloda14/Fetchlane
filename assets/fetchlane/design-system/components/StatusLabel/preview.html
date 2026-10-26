@@ -1,0 +1,27 @@
+<!-- @dsCard group="Status" height=300 subtitle="Icon + word + detail · never colour alone" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>StatusLabel</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+
+<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 40px;max-width:900px" id="s"></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+var U=F.units, rows=[
+ [{status:'downloading',total:5*U.GB,done:1},'Transfer running. Teal = Fetchlane is moving data.'],
+ [{status:'downloading',total:null,done:1},'Running, server sent no size. Bar is indeterminate.'],
+ [{status:'queued',pos:2},'Waiting for a free slot. Position shown in All lists.'],
+ [{status:'paused'},'Stopped by the person. Partial file kept.'],
+ [{id:'x',status:'retrying',retryIn:8,attempt:2,maxAttempts:5},'TRANSIENT. Fetchlane is handling it — amber, live countdown.'],
+ [{status:'failed',reason:'conn'},'PERSISTENT. Retries used up; needs the person.'],
+ [{status:'failed',reason:'disk'},'PERSISTENT. Never auto-retried.'],
+ [{status:'failed',reason:'noresume'},'PERSISTENT. Recovery discards progress → confirm.'],
+ [{status:'completed',at:'14:10'},'Done. File is on disk.'],
+ [{status:'cancelled'},'Stopped by the person; partial file deleted.']];
+document.getElementById('s').innerHTML = rows.map(function(r){return '<div style="display:flex;flex-direction:column;gap:2px">'+F.statusHTML(r[0])+'<span class="fl-subtle" style="font-size:12px">'+r[1]+'</span></div>';}).join('');
+</script>
+</body>
+</html>

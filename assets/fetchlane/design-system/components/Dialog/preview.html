@@ -1,0 +1,16 @@
+<!-- @dsCard group="Overlays" height=330 subtitle="Confirmation pattern · safe choice focused, destructive choice named for its effect" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Dialog</title></head>
+<body>
+<div class="fl fl-sheet" id="root">
+<div style="display:flex;gap:24px;align-items:flex-start" id="d"></div>
+</div>
+<script>
+var F = window.Fetchlane, I = F.icon;
+
+document.getElementById('d').innerHTML='<div class="fl-dialog is-narrow" role="alertdialog"><div class="fl-dlg-body"><h2>Cancel this download?</h2><div style="display:flex;flex-direction:column;gap:8px;color:var(--ink-muted)"><p style="margin:0">Cancelling stops <strong>OBS-Studio-31.1-Windows-x64-Installer.exe</strong> and <strong>deletes the 58.9 MB partial file</strong>. The entry stays in your list as Cancelled.</p><p style="margin:0">To keep the progress instead, choose Pause.</p></div></div><div class="fl-dlg-foot"><button class="fl-btn is-focus">Keep downloading</button><button class="fl-btn fl-btn-danger-fill">Cancel download</button></div></div>'+
+'<div class="fl-note" style="max-width:300px">Every action that discards data — Cancel, Restart on a non-resumable server, Remove with “delete files” ticked — goes through this pattern. Title is a question naming the action; body says exactly what is lost, with sizes; the default focus is the keep button; Esc and the scrim click both keep.</div>';
+</script>
+</body>
+</html>

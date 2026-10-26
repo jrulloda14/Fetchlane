@@ -1,0 +1,14 @@
+<!-- @dsCard group="Screens" height=800 width=1280 subtitle="Completed · Open file and Show in folder, plus the row overflow menu" -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>CompletedDownload</title>
+<style>body{margin:0;background:var(--surface-000);overflow:hidden}#app{width:1280px;height:800px}</style></head>
+<body>
+<div id="app"></div>
+<script>
+var app = Fetchlane.mountApp(document.getElementById('app'), {width:1280,height:800,interactive:true,view:'completed',open:'c4',sel:['c4'],focus:'c4'});
+Fetchlane.fit(document.getElementById('app'), 1280);
+setTimeout(function(){ app.act('menu','c4', document.querySelector('[data-row="c4"] [data-a="menu"]')); }, 60);
+</script>
+</body>
+</html>
