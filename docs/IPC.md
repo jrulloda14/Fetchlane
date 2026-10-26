@@ -4,19 +4,12 @@ The desktop backend (`src-tauri`) exposes the commands and the event below to th
 Call commands with `invoke` from `@tauri-apps/api/core`. Argument names and all JSON fields
 are camelCase.
 
-The UI is not built yet. Build it from the design system in
-[`assets/fetchlane/design-system/`](../assets/fetchlane/design-system/README.md): tokens, the
-`fl-` class contract, component specs, and the reference renderer. Use the icons in
-`assets/fetchlane/icons/` and the mark in `assets/fetchlane/logos/`. When you add the UI:
-
-- Serve the dev frontend on `http://localhost:1420` (already set as `build.devUrl`) and
-  build it into `dist/` (`build.frontendDist`).
-- Add `beforeDevCommand` / `beforeBuildCommand` to `src-tauri/tauri.conf.json` for your
-  frontend tooling.
-- Choose folders with `open({ directory: true })` from `@tauri-apps/plugin-dialog`. The
-  `dialog:allow-open` permission is already granted.
-- Open files and folders, and copy links, only through the commands below. They take a
-  download ID, never a path or URL, so the web view can't open arbitrary files.
+The UI in `src/` uses this contract (`src/api.ts` holds the typed wrappers). It is built from
+the design system in [`assets/fetchlane/design-system/`](../assets/fetchlane/design-system/README.md).
+File opening, folder revealing and link copying go through commands that take a download ID,
+never a path or URL, so the web view can't open arbitrary files. Folder pickers use
+`@tauri-apps/plugin-dialog` (`dialog:allow-open`), and the Paste button reads the clipboard
+(`clipboard-manager:allow-read-text`).
 
 ## Commands
 
@@ -31,6 +24,7 @@ The UI is not built yet. Build it from the design system in
 | `retry_now` | `{ id }` | **Retry now**: skips the remaining retry countdown, or retries a failed download. |
 | `restart_download` | `{ id }` | **Delete partial and restart**: deletes partial data and starts from zero. Not allowed for completed downloads. |
 | `move_in_queue` | `{ id, to: QueueMove }` | **Move to top / up / down**. Only for queued downloads. |
+| `move_to_position` | `{ id, position }` | Drag and drop in the queue: `position` is 1-based; past the end means last. |
 | `cancel_download` | `{ id }` | **Cancel download**: stops the download and deletes its partial file. The entry stays as `canceled`. |
 | `remove_download` | `{ id, deleteFiles: boolean }` | **Remove from list**: partial data of unfinished downloads is always deleted. A completed file is kept unless `deleteFiles` is true, in which case it goes to the Recycle Bin. If that fails, the command rejects and the entry stays. |
 | `clear_finished` | none | Removes completed and canceled entries from the list. Files stay on disk. |

@@ -8,10 +8,16 @@ one file in a thousand is worse than one that's slow.
 See the prerequisites in the README. Then:
 
 ```bash
+npm install
+npm run tauri dev          # the app, with hot reload
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all
+npm test && npm run typecheck
 ```
+
+To work on the UI without Rust, run `npm run dev` and open http://localhost:1420 in a browser.
+It shows sample data (see `src/dev/preview.ts`).
 
 ## Ground rules
 
@@ -25,6 +31,9 @@ cargo fmt --all
 - Never log full URLs. Use `redact::redact_url`.
 - Don't add options that weaken TLS verification or follow HTTPS→HTTP redirects.
 - Error messages are user-facing: plain language, no jargon, say what to do next.
+- UI work follows `assets/fetchlane/design-system/README.md`: tokens and `fl-` classes only,
+  sentence case, status shown with an icon and words (never colour alone), and confirmations
+  that state what will be lost. Escape every server-provided string with `esc()`.
 - Keep dependencies few and well maintained. If you change dependencies, regenerate
   `THIRD_PARTY_NOTICES.md` with `python scripts/third_party_notices.py`.
 - Contributions must be original work, or work under a license compatible with MIT.

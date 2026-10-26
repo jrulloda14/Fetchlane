@@ -262,6 +262,10 @@ fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
     m.lock().unwrap_or_else(|p| p.into_inner())
 }
 
+fn not_queued() -> DownloadError {
+    DownloadError::invalid("Only queued downloads can be moved.")
+}
+
 fn not_found() -> DownloadError {
     DownloadError::invalid("That download no longer exists.")
 }
@@ -492,11 +496,13 @@ impl Engine {
         let dir = dest_dir
             .map(Path::to_path_buf)
             .unwrap_or_else(|| self.settings().download_dir);
+        let server_name = filename::sanitize(&raw_name);
         let suggested_name = {
             let st = lock(&inner.state);
-            unique_name(&st, &dir, &filename::sanitize(&raw_name))
+            unique_name(&st, &dir, &server_name)
         };
         Ok(ProbeResult {
+            name_clash: suggested_name != server_name,
             suggested_name,
             total_size,
             content_type,
@@ -690,27 +696,36 @@ impl Engine {
 
     /// Reorder a queued download among the other queued downloads.
     pub fn move_in_queue(&self, id: &str, to: QueueMove) -> Result<(), DownloadError> {
+        let current = self
+            .get(id)
+            .ok_or_else(not_found)?
+            .queue_position
+            .ok_or_else(not_queued)?;
+        let target = match to {
+            QueueMove::Top => 1,
+            QueueMove::Up => current.saturating_sub(1).max(1),
+            QueueMove::Down => current + 1,
+        };
+        self.move_to_position(id, target)
+    }
+
+    /// Put a queued download at `position` (1-based) in the queue, for
+    /// drag-and-drop reordering. Positions past the end mean last.
+    pub fn move_to_position(&self, id: &str, position: u32) -> Result<(), DownloadError> {
         {
             let mut st = lock(&self.inner.state);
             let idx = st.index(id).ok_or_else(not_found)?;
             if st.entries[idx].rec.status != Status::Queued {
-                return Err(DownloadError::invalid(
-                    "Only queued downloads can be moved.",
-                ));
+                return Err(not_queued());
             }
-            let queued = st.queued_indices();
-            let pos = queued
-                .iter()
-                .position(|&i| i == idx)
-                .expect("entry is queued");
-            let target = match to {
-                QueueMove::Top => queued[0],
-                QueueMove::Up if pos > 0 => queued[pos - 1],
-                QueueMove::Down if pos + 1 < queued.len() => queued[pos + 1],
-                _ => return Ok(()),
-            };
             let entry = st.entries.remove(idx);
-            st.entries.insert(target, entry);
+            let queued = st.queued_indices();
+            let p = (position.max(1) as usize - 1).min(queued.len());
+            let at = match queued.get(p) {
+                Some(&i) => i,
+                None => queued.last().map_or(st.entries.len(), |&i| i + 1),
+            };
+            st.entries.insert(at, entry);
         }
         self.inner.persist_now();
         self.inner.notify_changed();

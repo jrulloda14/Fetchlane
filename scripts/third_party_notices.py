@@ -27,5 +27,21 @@ lines = [
 ]
 for p in pkgs:
     lines.append(f"| {p['name']} | {p['version']} | {p.get('license') or 'see crate'} | {p.get('repository') or ''} |")
+# npm packages bundled into the UI (dev-only tools such as Vite are excluded).
+lock = json.load(open("package-lock.json", encoding="utf-8"))
+npm = sorted(
+    (path.split("node_modules/")[-1], info)
+    for path, info in lock.get("packages", {}).items()
+    if path.startswith("node_modules/") and not info.get("dev") and not info.get("devOptional")
+)
+lines += [
+    "",
+    "## npm packages bundled into the UI",
+    "",
+    "| Package | Version | License |",
+    "| --- | --- | --- |",
+]
+for name, info in npm:
+    lines.append(f"| {name} | {info.get('version', '')} | {info.get('license', 'see package')} |")
 open("THIRD_PARTY_NOTICES.md", "w", encoding="utf-8").write("\n".join(lines) + "\n")
-print(f"{len(pkgs)} crates")
+print(f"{len(pkgs)} crates, {len(npm)} npm packages")

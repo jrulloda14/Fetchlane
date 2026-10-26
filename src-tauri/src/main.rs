@@ -85,6 +85,7 @@ fn main() {
             commands::retry_now,
             commands::restart_download,
             commands::move_in_queue,
+            commands::move_to_position,
             commands::cancel_download,
             commands::remove_download,
             commands::get_source_url,

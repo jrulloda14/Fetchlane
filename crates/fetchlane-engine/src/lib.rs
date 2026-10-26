@@ -90,8 +90,9 @@ impl Default for EngineConfig {
             connect_timeout: Duration::from_secs(20),
             read_timeout: Duration::from_secs(30),
             response_timeout: Duration::from_secs(45),
-            backoff_base: Duration::from_secs(1),
-            backoff_max: Duration::from_secs(30),
+            // 5 s, 15 s, 45 s, then 2 min (as described in Settings).
+            backoff_base: Duration::from_secs(5),
+            backoff_max: Duration::from_secs(120),
             checkpoint_bytes: 8 * 1024 * 1024,
             checkpoint_interval: Duration::from_secs(2),
             min_segment_size: 2 * 1024 * 1024,

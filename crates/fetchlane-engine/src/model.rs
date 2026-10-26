@@ -257,7 +257,11 @@ pub enum QueueMove {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProbeResult {
+    /// Sanitized and unique in the destination folder.
     pub suggested_name: String,
+    /// A file (or download) already uses the server's name, so
+    /// `suggested_name` has a number added.
+    pub name_clash: bool,
     pub total_size: Option<u64>,
     pub content_type: Option<String>,
     /// Range support was advertised; resuming will still be verified.

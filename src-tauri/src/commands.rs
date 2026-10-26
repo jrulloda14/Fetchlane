@@ -102,6 +102,12 @@ pub fn move_in_queue(state: State<'_, AppState>, id: String, to: QueueMove) -> C
     Ok(state.engine.move_in_queue(&id, to)?)
 }
 
+/// Drag-and-drop reordering: `position` is 1-based in the queue.
+#[tauri::command]
+pub fn move_to_position(state: State<'_, AppState>, id: String, position: u32) -> CmdResult<()> {
+    Ok(state.engine.move_to_position(&id, position)?)
+}
+
 /// Full link, including hidden parameters, for the reveal toggle.
 #[tauri::command]
 pub fn get_source_url(state: State<'_, AppState>, id: String) -> CmdResult<String> {

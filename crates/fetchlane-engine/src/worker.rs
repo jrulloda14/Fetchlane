@@ -393,10 +393,13 @@ pub(crate) async fn run(
     }
 }
 
+/// Delay before automatic retry number `failures` (1-based): the base,
+/// tripled for each further attempt, capped, with +/-20% jitter. A server's
+/// `Retry-After` is honored up to the cap.
 fn backoff(cfg: &crate::EngineConfig, failures: u32, retry_after: Option<Duration>) -> Duration {
     let exp = cfg
         .backoff_base
-        .saturating_mul(1u32 << min(failures.saturating_sub(1), 16));
+        .saturating_mul(3u32.saturating_pow(failures.saturating_sub(1).min(16)));
     let base = min(exp, cfg.backoff_max).mul_f64(0.8 + fastrand::f64() * 0.4);
     match retry_after {
         Some(ra) => base.max(min(ra, cfg.backoff_max)),
@@ -910,6 +913,19 @@ fn move_into_place(dir: &Path, name: &str, part: &Path) -> io::Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn backoff_follows_the_documented_schedule() {
+        let cfg = crate::EngineConfig::default();
+        let secs: Vec<f64> = (1..=5)
+            .map(|n| backoff(&cfg, n, None).as_secs_f64())
+            .collect();
+        for (got, want) in secs.iter().zip([5.0, 15.0, 45.0, 120.0, 120.0]) {
+            assert!((got / want - 1.0).abs() <= 0.2 + 1e-9, "{secs:?}");
+        }
+        let ra = backoff(&cfg, 1, Some(Duration::from_secs(60))).as_secs();
+        assert_eq!(ra, 60);
+    }
 
     #[test]
     fn segment_planning() {

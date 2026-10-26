@@ -10,10 +10,29 @@ arrive intact**, even after dropped connections, pauses, crashes, and misbehavin
 Built with Rust and [Tauri 2](https://tauri.app). It is MIT-licensed, written from scratch,
 and not affiliated with any commercial download manager.
 
-> **Status:** The download engine and the desktop backend are done and tested. The user
-> interface is not built yet; [`docs/IPC.md`](docs/IPC.md) describes the API it will use.
+> **Status:** Working MVP for Windows: download engine, desktop app, and installer.
 
-## Features (engine)
+## Features
+
+**App**
+
+- A desktop window built from the Fetchlane design system: sidebar lists (All, Active,
+  Queued, Completed, Failed), a toolbar, a download table with live progress, a details
+  panel, and a status bar
+- Add download: paste a link anywhere with Ctrl+V. Fetchlane checks the name and size,
+  warns about name clashes, shows free space, and offers **Download** (first in line) or
+  **Add to queue**.
+- Per-download actions, an overflow and right-click menu, multi-select with a selection
+  toolbar, drag-to-reorder in the queue, and full keyboard control (arrow keys, Space,
+  Enter, Delete, Ctrl+N/F/I/A, Alt+↑/↓, Shift+F10)
+- Confirmations that state what will be lost (cancel, restart, remove), with the safe
+  choice focused
+- Settings that apply immediately: folder, simultaneous downloads, connections, retries,
+  theme (System/Light/Dark), density, and history
+- Responsive layout down to 960 × 640: the sidebar collapses to an icon rail, and the speed
+  and time-left columns fold into the status cell
+
+**Engine**
 
 - HTTP and HTTPS downloads with streaming I/O and bounded memory (256 KiB write buffers)
 - Pause, resume, cancel, retry, restart, and remove, with no pause/cancel races and never
@@ -53,7 +72,7 @@ and not affiliated with any commercial download manager.
 - Rust 1.90 or newer (`rustup`, MSVC toolchain)
 - Visual Studio 2022 Build Tools with "Desktop development with C++"
 - Microsoft Edge WebView2 Runtime (preinstalled on Windows 10/11)
-- Node.js 20 or newer (only needed for the Tauri CLI and the future UI)
+- Node.js 20 or newer
 
 On macOS and Linux, install the [Tauri prerequisites](https://tauri.app/start/prerequisites/)
 for your platform. The engine is portable, but only Windows has been tested.
@@ -61,30 +80,33 @@ for your platform. The engine is portable, but only Windows has been tested.
 ## Development
 
 ```bash
-# Engine unit tests and integration tests (local test server, no network needed)
-cargo test -p fetchlane-engine
-
-# Lints for the whole workspace
-cargo clippy --workspace --all-targets
-
-# Build and start the desktop app (opens a window that loads the dev UI URL)
-cargo run -p fetchlane
+npm install                 # once
+npm run tauri dev           # run the app with hot reload
 ```
 
-Until the UI exists, `cargo run -p fetchlane` starts the backend and its engine (state and log
-files get created), but the window has nothing to show. The UI work will add a frontend at
-`http://localhost:1420` and the `beforeDevCommand`/`beforeBuildCommand` hooks; then use
-`npx @tauri-apps/cli dev` for development.
+Checks:
+
+```bash
+cargo test --workspace                                 # engine: unit + integration tests
+cargo clippy --workspace --all-targets -- -D warnings
+npm test                                               # UI logic tests (Vitest)
+npm run typecheck
+```
+
+**UI preview without the backend.** `npm run dev` on its own serves the UI at
+`http://localhost:1420`. When it's opened in a normal browser, Fetchlane installs Tauri's IPC
+mocks with sample downloads (`src/dev/preview.ts`), so the interface can be reviewed and
+styled without Rust. The preview code is excluded from production builds.
 
 ## Building an installer
 
-Once the UI is built into `dist/`:
-
 ```bash
-npx @tauri-apps/cli build
+npm run tauri build
 ```
 
-This produces a per-user NSIS installer under `target/release/bundle/nsis/`.
+This produces a per-user installer (no admin rights needed) at
+`target/release/bundle/nsis/Fetchlane_<version>_x64-setup.exe`. The app itself is
+`target/release/fetchlane.exe`.
 
 ## Architecture
 
@@ -98,7 +120,13 @@ crates/fetchlane-engine/       Download engine: pure Rust, no UI dependency
   src/error.rs             Error classification and user-facing messages
   tests/                   Integration tests and a deterministic misbehaving HTTP server
 src-tauri/                 Desktop shell: wires the engine to Tauri commands and events
-docs/IPC.md                Command and event contract for the UI
+src/                       UI (TypeScript, no framework)
+  app.ts                   State, rendering, live updates, actions, keyboard, menus
+  views.ts                 HTML builders following the design system's class contract
+  model.ts                 Maps engine data to design-system states, lists and groups
+  api.ts, format.ts        Typed commands; size/speed/time formatting
+  dev/preview.ts           Browser preview with sample data (development only)
+docs/IPC.md                Command and event contract between the UI and the backend
 assets/fetchlane/          Brand and design system: logos, line icons, tokens, component specs
 ```
 
@@ -109,6 +137,13 @@ behaviour. `tokens.json` is the source of truth for tokens, `components/bundle.c
 behaviour spec. The app icon in `src-tauri/icons/` is generated from
 `assets/fetchlane/logos/fetchlane-mark-light.svg` with
 `npx @tauri-apps/cli icon assets/fetchlane/logos/fetchlane-mark-light.svg`, run from `src-tauri`.
+
+**UI.** The UI uses the design system's `tokens.css` and `bundle.css` directly and ports the
+reference renderer's markup to TypeScript. The window is drawn with a custom title bar. It
+re-renders a list only when a download's state changes; speeds, sizes, progress bars and
+countdowns are updated in place, so hover and keyboard focus are never disturbed. Remote
+file names and hosts are always HTML-escaped. The web view can't open files or links by
+path: it asks the backend by download ID.
 
 **Data flow.** The UI calls commands (`add_download`, `pause_download`, and so on). The engine
 updates its state and schedules workers. Workers stream to `<name>.<id>.fetchlane-part` in the
@@ -140,7 +175,9 @@ destination folder. The engine broadcasts changes, and the shell forwards them a
 
 ## Known limitations
 
-- **No UI yet.** It is deferred to a separate effort.
+- Fonts: the design calls for Segoe UI Variable and Cascadia Mono. On Windows 10 these fall
+  back to Segoe UI and Consolas.
+- The window is tested on Windows only. macOS and Linux builds should work but are unverified.
 - Responses that have neither `Content-Length` nor chunked encoding end when the connection
   closes, so a truncated transfer can't be told apart from a complete one.
 - Downloads of unknown size, and resources without an ETag or Last-Modified header, can't be
@@ -165,6 +202,6 @@ destination folder. The engine broadcasts changes, and the shell forwards them a
 
 ## License
 
-MIT. See [LICENSE](LICENSE). Third-party crates are listed in
+MIT. See [LICENSE](LICENSE). Third-party crates and npm packages are listed in
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The Fetchlane mark, icons, and
 design system in `assets/fetchlane/` belong to the Fetchlane project.

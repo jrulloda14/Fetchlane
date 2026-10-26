@@ -110,10 +110,24 @@ async fn queue_positions_moves_and_first_in_line() {
         [Some(2), Some(3), Some(4)]
     );
 
+    // Drag and drop: c to position 3, then past the end.
+    engine.move_to_position(&c, 3).unwrap();
+    assert_eq!(
+        positions(&engine, &[&e.id, &d, &c, &b]),
+        [Some(1), Some(2), Some(3), Some(4)]
+    );
+    engine.move_to_position(&c, 99).unwrap();
+    engine.move_to_position(&c, 2).unwrap();
+    assert_eq!(
+        positions(&engine, &[&e.id, &c, &d, &b]),
+        [Some(1), Some(2), Some(3), Some(4)]
+    );
+
     for id in [&a, &b, &c, &d, &e.id] {
         wait_status(&engine, id, Status::Completed, 20).await;
     }
     assert_eq!(srv.start_order(), ["/a", "/e", "/c", "/d", "/b"]);
+    assert!(engine.move_to_position(&a, 1).is_err());
 }
 
 #[tokio::test]

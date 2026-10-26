@@ -258,7 +258,10 @@ async fn existing_files_are_never_overwritten() {
     std::fs::write(env.downloads.join("data.bin"), b"keep me").unwrap();
     let engine = env.engine(1, 3).await;
 
-    // Collision known when adding.
+    // Collision known when adding; the probe warns about it.
+    let p = engine.probe(&srv.url("/data.bin"), None).await.unwrap();
+    assert!(p.name_clash);
+    assert_eq!(p.suggested_name, "data (1).bin");
     let id = add(&engine, srv.url("/data.bin"));
     let v = wait_status(&engine, &id, Status::Completed, 10).await;
     assert_eq!(v.file_name, "data (1).bin");
@@ -719,6 +722,7 @@ async fn probe_uses_safe_server_filenames() {
     let engine = env.engine(1, 3).await;
     let p = engine.probe(&srv.url("/dl?id=1"), None).await.unwrap();
     assert_eq!(p.suggested_name, "résumé.pdf");
+    assert!(!p.name_clash);
     assert_eq!(p.total_size, Some(5000));
     assert!(p.resumable);
     let p = engine.probe(&srv.url("/evil"), None).await.unwrap();
