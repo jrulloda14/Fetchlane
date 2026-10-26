@@ -34,7 +34,7 @@ cargo test --workspace
 - Links from outside the window (browser, command line) must always open Add download for the person to confirm. Never start a download on their behalf.
 - Error messages are user-facing: plain language, no jargon, say what to do next.
 - UI work follows `assets/fetchlane/design-system/README.md`: tokens and `fl-` classes only, sentence case, status shown with an icon and words (never colour alone), and confirmations that state what will be lost. Escape every server-provided string with `esc()`.
-- Keep dependencies few and well maintained. If you change dependencies, regenerate `THIRD_PARTY_NOTICES.md` with `python scripts/third_party_notices.py`.
+- Keep dependencies few and well maintained. If you change dependencies, regenerate `THIRD_PARTY_NOTICES.md` and `THIRD_PARTY_LICENSES.txt` with `python scripts/third_party_notices.py`.
 - Contributions must be original work, or work under a license compatible with MIT. Don't copy code, logos or assets from proprietary download managers.
 
 ## Pull requests

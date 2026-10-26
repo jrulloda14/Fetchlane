@@ -1,7 +1,8 @@
 // Fetchlane extension: hands browser downloads and links to the Fetchlane
 // app through its native messaging host. Fetchlane then shows Add download,
 // prefilled, so the person still chooses the folder and confirms.
-import { getSettings, hostOf, isSkipped, isSupported, sendToApp } from "./shared.js";
+import { captureDownload, shouldCapture } from "./capture.js";
+import { getSettings, isSupported, sendToApp } from "./shared.js";
 
 const MENU_LINK = "fetchlane-link";
 const MENU_MEDIA = "fetchlane-media";
@@ -15,6 +16,8 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
+// Right-click "Download with Fetchlane" works whether or not catching
+// downloads is on; the browser never started a download of its own.
 chrome.contextMenus.onClicked.addListener((info) => {
   const url = info.menuItemId === MENU_MEDIA ? info.srcUrl : info.linkUrl;
   if (!isSupported(url)) return showProblem("Fetchlane can only download http, https and magnet links.");
@@ -22,30 +25,21 @@ chrome.contextMenus.onClicked.addListener((info) => {
 });
 
 chrome.downloads.onCreated.addListener(async (item) => {
-  const url = item.finalUrl || item.url;
-  // blob:, data: and file: downloads only exist inside the browser.
-  if (!/^https?:\/\//i.test(url) || item.state !== "in_progress") return;
-  if (item.byExtensionId === chrome.runtime.id) return;
-  if (givenBack.delete(url) || givenBack.delete(item.url)) return;
-  const s = await getSettings();
-  if (!s.catchDownloads) return;
-  if (isSkipped(hostOf(item.referrer || url), s.skipHosts) || isSkipped(hostOf(url), s.skipHosts)) return;
-  const size = item.totalBytes > 0 ? item.totalBytes : item.fileSize;
-  if (s.minSizeMb > 0 && size > 0 && size < s.minSizeMb * 1024 * 1024) return;
-
-  // Stop the browser's copy first, so its placeholder file doesn't clash with
-  // the name Fetchlane picks. If Fetchlane can't take the link, the browser
-  // downloads it again, so nothing is lost.
-  await chrome.downloads.cancel(item.id).catch(() => {});
-  await chrome.downloads.erase({ id: item.id }).catch(() => {});
-  // The browser removes its empty placeholder file just after cancelling.
-  await new Promise((r) => setTimeout(r, 500));
-  try {
-    await handOver(url);
-  } catch {
-    givenBack.add(url);
-    await chrome.downloads.download({ url }).catch(() => givenBack.delete(url));
-  }
+  if (givenBack.delete(item.finalUrl || item.url) || givenBack.delete(item.url)) return;
+  if (!shouldCapture(item, await getSettings(), chrome.runtime.id)) return;
+  await captureDownload(item, {
+    cancel: (id) => chrome.downloads.cancel(id),
+    erase: (id) => chrome.downloads.erase({ id }),
+    wait: (ms) => new Promise((r) => setTimeout(r, ms)),
+    handOver,
+    redownload: (url) => {
+      givenBack.add(url);
+      return chrome.downloads.download({ url }).catch((e) => {
+        givenBack.delete(url);
+        throw e;
+      });
+    },
+  });
 });
 
 async function handOver(url) {

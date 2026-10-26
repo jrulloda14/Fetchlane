@@ -9,5 +9,5 @@
 - [ ] Integration test added for any change to download, resume or persistence logic, asserting final file contents
 - [ ] Regression test added for any bug fix (fails without the fix)
 - [ ] UI follows the design system (tokens, `fl-` classes, status with icon and words, server strings escaped)
-- [ ] `THIRD_PARTY_NOTICES.md` regenerated if dependencies changed
+- [ ] `THIRD_PARTY_NOTICES.md` and `THIRD_PARTY_LICENSES.txt` regenerated if dependencies changed
 - [ ] No telemetry, no weakened TLS, and nothing from outside the window starts a download without confirmation

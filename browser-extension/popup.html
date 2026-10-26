@@ -16,9 +16,14 @@
 
   <section>
     <label class="row">
-      <span class="text"><b>Catch browser downloads</b><span>Downloads you start open in Fetchlane’s Add download.</span></span>
-      <input type="checkbox" id="catch" role="switch">
+      <span class="text"><b>Catch browser downloads</b><span>Off by default. When on, downloads you start open in Fetchlane’s Add download.</span></span>
+      <input type="checkbox" id="catch" role="switch" aria-describedby="catchNote">
     </label>
+    <div class="caveat" id="catchNote" hidden>
+      <p>The browser stops its own download and sends <b>only the link</b> to Fetchlane. Your sign-in, form data and one-time links don’t go with it, so some downloads can fail in Fetchlane.</p>
+      <p>If you choose <b>Cancel</b> in Fetchlane’s Add download, nothing is downloaded; start the download in the browser again.</p>
+      <p>If Fetchlane can’t be reached, the browser starts the link again, which may not work for links that only work once.</p>
+    </div>
     <label class="row" id="siteRow" hidden>
       <span class="text"><b>On <span id="site"></span></b><span>Turn off for sites that need you to be signed in.</span></span>
       <input type="checkbox" id="siteCatch" role="switch">
@@ -29,7 +34,7 @@
     </label>
   </section>
 
-  <p class="note">Right-click a link and choose <b>Download with Fetchlane</b> to send one link, including magnet links. Fetchlane can’t use your browser’s sign-in, so a download that needs it may fail there.</p>
+  <p class="note">With catching on or off, right-click a link and choose <b>Download with Fetchlane</b> to send one link, including magnet links. Fetchlane can’t use your browser’s sign-in, so a download that needs it may fail there.</p>
 
   <script type="module" src="popup.js"></script>
 </body>

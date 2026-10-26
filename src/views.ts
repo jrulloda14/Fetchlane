@@ -950,11 +950,11 @@ function browserSection(integ: IntegrationStatus | null, row: SettingsRow): stri
     '<section class="fl-sgroup"><h2>Browser</h2><div class="fl-scard">' +
     row("globe", "Browser extension",
       ready
-        ? "Fetchlane is ready for its extension in Chrome, Edge and Brave. Downloads you start in the browser open here in Add download, so you choose the folder and confirm."
+        ? "Fetchlane is ready for its extension in Chrome, Edge and Brave. Right-click a link and choose Download with Fetchlane; it opens here in Add download, so you choose the folder and confirm. Catching every browser download is off until you turn it on in the extension."
         : "Fetchlane couldn’t register itself for the browser extension. Restart Fetchlane, and check that it isn’t blocked by security software.",
       `<button class="fl-btn" data-a="extfolder"${integ.extensionDir ? "" : " disabled"}>${icon("folderOpen", 16)}Show extension folder</button>`) +
     row(null, "How to add the extension",
-      "Open your browser’s extensions page (chrome://extensions or edge://extensions), turn on Developer mode, choose <b>Load unpacked</b> and select the extension folder. Then pin Fetchlane to the toolbar to turn catching downloads on or off.",
+      "Open your browser’s extensions page (chrome://extensions or edge://extensions), turn on Developer mode, choose <b>Load unpacked</b> and select the extension folder. Then pin Fetchlane to the toolbar; its popup explains what catching downloads can and can’t carry over before you turn it on.",
       "") +
     row("link", "Open magnet links with Fetchlane", magnetSub,
       `<button class="fl-toggle" role="switch" aria-checked="${integ.magnetHandler}" data-a="magnet" aria-label="Open magnet links with Fetchlane"></button><span style="width:28px;font-size:13px">${integ.magnetHandler ? "On" : "Off"}</span>`) +

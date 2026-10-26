@@ -19,7 +19,7 @@ use tokio_util::sync::CancellationToken;
 use crate::engine::{part_path, Inner, Live, Outcome};
 use crate::error::{DownloadError, ErrorKind};
 use crate::filename;
-use crate::http::{self, accepts_byte_ranges, content_length, content_range, validators};
+use crate::http::{self, content_length, content_range, validators};
 use crate::model::{DownloadRecord, Layout, Phase, Segment, Validators};
 use crate::redact::redact_url;
 
@@ -339,7 +339,24 @@ pub(crate) async fn run(
         }
         match halt {
             Halt::Stop => return Outcome::Stopped,
+            Halt::Changed | Halt::RangesUnreliable if before > 0 => {
+                // Starting over would throw away progress saved by an earlier
+                // attempt or run. Keep the partial file and leave that
+                // decision to the user (Restart). Data from this attempt
+                // alone is downloaded again automatically.
+                let changed = matches!(halt, Halt::Changed);
+                if changed {
+                    tracing::info!(id = %ctx.id, "file changed on the server; partial data kept until restart");
+                } else {
+                    tracing::warn!(id = %ctx.id, "server range responses were inconsistent; partial data kept until restart");
+                    job.ranges_unreliable = true;
+                }
+                job.resumable = false;
+                ctx.publish(&job);
+                return Outcome::Failed(restart_needed(changed));
+            }
             Halt::Changed | Halt::RangesUnreliable => {
+                // No earlier progress, so starting over loses nothing saved.
                 restarts += 1;
                 if restarts > MAX_RESTARTS {
                     return Outcome::Failed(DownloadError::new(
@@ -391,6 +408,26 @@ pub(crate) async fn run(
             }
         }
     }
+}
+
+/// The partial data can't be continued; only an explicit restart can go on.
+fn restart_needed(changed: bool) -> DownloadError {
+    DownloadError::new(
+        ErrorKind::CannotResume,
+        if changed {
+            "The file changed on the server since this download started, so the partial data can't be continued. Restart to download it again."
+        } else {
+            "The server didn't send the rest of the file reliably, so the partial data can't be continued. Restart to download it again."
+        },
+    )
+}
+
+/// The partial file on disk doesn't match what was saved about it.
+fn partial_mismatch() -> Halt {
+    Halt::Fail(DownloadError::new(
+        ErrorKind::CannotResume,
+        "The partial file doesn't match this download, so it can't be continued. Restart to download it again.",
+    ))
 }
 
 /// Delay before automatic retry number `failures` (1-based): the base,
@@ -500,7 +537,11 @@ async fn resume_single(ctx: &Ctx, job: &mut Job) -> Result<(), Halt> {
     };
     let have = min(job.plan.checkpointed(), on_disk);
     let total = job.total.expect("can_resume requires a known size");
-    if have == 0 || have > total {
+    if have > total {
+        return Err(partial_mismatch());
+    }
+    if have == 0 {
+        // The partial file is gone; nothing is lost by starting over.
         job.reset();
         ctx.commit(job);
         return fresh(ctx, job).await;
@@ -529,15 +570,16 @@ async fn resume_single(ctx: &Ctx, job: &mut Job) -> Result<(), Halt> {
         }
         200 => {
             // Range ignored, or If-Range failed because the file changed.
-            // Either way this is the complete file: overwrite from zero.
-            tracing::info!(id = %ctx.id, "server sent the whole file; restarting from the beginning");
+            // Using this reply would overwrite the partial data, so stop and
+            // keep it; the run loop asks the user to restart.
             let headers = resp.headers();
-            job.validators = validators(headers);
-            job.total = content_length(headers);
-            job.resumable = job.total.is_some()
-                && accepts_byte_ranges(headers)
-                && job.validators.if_range().is_some();
-            single_stream(ctx, job, resp, 0).await
+            let changed = http::validators_changed(&job.validators, &validators(headers))
+                || content_length(headers).is_some_and(|len| len != total);
+            Err(if changed {
+                Halt::Changed
+            } else {
+                Halt::RangesUnreliable
+            })
         }
         416 => Err(Halt::Changed),
         s => Err(Halt::Fail(DownloadError::from_status(
@@ -657,6 +699,9 @@ async fn segmented_fresh(ctx: &Ctx, job: &mut Job, first: Response, n: usize) ->
 async fn resume_segmented(ctx: &Ctx, job: &mut Job) -> Result<(), Halt> {
     let len = tokio::fs::metadata(&job.part).await.map(|m| m.len()).ok();
     if job.total.is_none() || len != job.total {
+        if len.is_some() && job.plan.checkpointed() > 0 {
+            return Err(partial_mismatch());
+        }
         job.reset();
         ctx.commit(job);
         return fresh(ctx, job).await;

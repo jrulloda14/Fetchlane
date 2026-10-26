@@ -161,12 +161,13 @@ impl Entry {
 }
 
 /// Forget the partial data and everything learned about the resource.
+/// Whether the server's ranges can be trusted is kept: a restart on such a
+/// server downloads with one connection and no ranges from the start.
 fn reset_progress(rec: &mut DownloadRecord) {
     rec.layout = Layout::fresh();
     rec.total_size = None;
     rec.validators = Default::default();
     rec.resumable = false;
-    rec.ranges_unreliable = false;
 }
 
 fn cannot_resume_error() -> DownloadError {
@@ -336,7 +337,10 @@ fn reconcile_on_load(rec: &mut DownloadRecord, auto_resume: bool) {
         }
         Layout::Segmented { segments } => {
             let expected = segments.last().map(|s| s.end);
-            if expected != Some(len) || rec.total_size != expected {
+            let saved: u64 = segments.iter().map(|s| s.done).sum();
+            // With saved progress the layout is kept, so the worker reports
+            // the mismatch and the user decides to restart.
+            if (expected != Some(len) || rec.total_size != expected) && saved == 0 {
                 rec.layout = Layout::fresh();
             }
         }

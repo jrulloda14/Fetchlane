@@ -113,7 +113,7 @@ async fn pause_and_resume_continue_from_checkpoint() {
 }
 
 #[tokio::test]
-async fn server_that_stops_honoring_ranges_is_handled() {
+async fn server_that_stops_honoring_ranges_keeps_partial_until_restart() {
     let srv = TestServer::start().await;
     let body = pattern(MB, 5);
     srv.file(
@@ -124,14 +124,19 @@ async fn server_that_stops_honoring_ranges_is_handled() {
     let env = Env::new();
     let engine = env.engine(1, 3).await;
     let id = add(&engine, srv.url("/s.bin"));
-    wait_status(&engine, &id, Status::Completed, 10).await;
+    // The resume request got the whole file (200). Writing it would have
+    // overwritten the 300 KB already saved, so the download stops instead.
+    let kept = Kept {
+        saved: Some(300_000),
+        part_len: 300_000,
+        requests: 2,
+    };
+    assert_kept_until_restart(&srv, &env, &engine, &id, "/s.bin", &body, kept).await;
     let reqs = srv.requests("/s.bin");
     assert!(
         range_start(&reqs[1]).unwrap() > 0,
         "second request asked for a range"
     );
-    // The 200 reply replaced the partial data instead of being appended.
-    assert_eq!(env.read("s.bin"), body);
 }
 
 #[tokio::test]
@@ -147,9 +152,16 @@ async fn changed_resource_detected_via_if_range() {
     let env = Env::new();
     let engine = env.engine(1, 3).await;
     let id = add(&engine, srv.url("/c.bin"));
-    let v = wait_status(&engine, &id, Status::Completed, 10).await;
+    // If-Range failed, so the server sent the new file. The old partial data
+    // is kept until the user restarts; the restart gets the new file.
+    let kept = Kept {
+        saved: Some(300_000),
+        part_len: 300_000,
+        requests: 2,
+    };
+    assert_kept_until_restart(&srv, &env, &engine, &id, "/c.bin", &new, kept).await;
+    let v = engine.get(&id).unwrap();
     assert_eq!(v.total_size, Some(new.len() as u64));
-    assert_eq!(env.read("c.bin"), new);
 }
 
 #[tokio::test]
@@ -172,15 +184,69 @@ async fn changed_resource_detected_when_server_ignores_if_range() {
     let env = Env::new();
     let engine = env.engine(1, 3).await;
     let id = add(&engine, srv.url("/c2.bin"));
-    wait_status(&engine, &id, Status::Completed, 10).await;
-    // Same length, different bytes: only the ETag check can catch this.
-    assert_eq!(env.read("c2.bin"), new);
-    let reqs = srv.requests("/c2.bin");
+    // Same length, different bytes: only the ETag check can catch this. The
+    // old partial data is kept until the user restarts.
+    let kept = Kept {
+        saved: Some(300_000),
+        part_len: 300_000,
+        requests: 2,
+    };
+    assert_kept_until_restart(&srv, &env, &engine, &id, "/c2.bin", &new, kept).await;
     assert_eq!(
-        reqs.len(),
+        srv.requests("/c2.bin").len(),
         3,
-        "first, rejected resume, fresh restart: {reqs:?}"
+        "first, rejected resume, restart"
     );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn invalid_content_range_on_resume_keeps_partial_until_restart() {
+    let srv = TestServer::start().await;
+    let body = pattern(MB, 31);
+    srv.file("/ir.bin", Resource::new(body.clone()));
+    srv.configure("/ir.bin", |r| {
+        r.drops.push_back(Some(300_000));
+        // Same file, but the resume reply claims the wrong range.
+        r.replace_after_drop =
+            Some(Resource::new(body.clone()).ranges(RangeMode::BrokenContentRange));
+    });
+    let env = Env::new();
+    let engine = env.engine(1, 3).await;
+    let id = add(&engine, srv.url("/ir.bin"));
+    let kept = Kept {
+        saved: Some(300_000),
+        part_len: 300_000,
+        requests: 2,
+    };
+    assert_kept_until_restart(&srv, &env, &engine, &id, "/ir.bin", &body, kept).await;
+    // The restart didn't trust ranges on this server again.
+    assert!(srv.requests("/ir.bin").last().unwrap().range.is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn segmented_download_keeps_progress_when_ranges_stop_working() {
+    let srv = TestServer::start().await;
+    let body = pattern(2 * MB, 32);
+    srv.file("/sr.bin", Resource::new(body.clone()));
+    srv.configure("/sr.bin", |r| {
+        // The last segment drops after the others finished, so progress is
+        // saved; afterwards the server ignores ranges.
+        r.drops.extend([None, None, None, Some(50_000)]);
+        r.replace_after_drop = Some(Resource::new(body.clone()).ranges(RangeMode::Ignored));
+    });
+    let env = Env::new();
+    let engine = env.engine(4, 3).await;
+    let id = add(&engine, srv.url("/sr.bin"));
+    let failed = wait_status(&engine, &id, Status::Failed, 10).await;
+    let requests = srv.requests("/sr.bin").len();
+    // A segmented partial file has its full size; the progress inside is kept.
+    let kept = Kept {
+        saved: Some(failed.downloaded),
+        part_len: body.len() as u64,
+        requests,
+    };
+    assert_kept_until_restart(&srv, &env, &engine, &id, "/sr.bin", &body, kept).await;
+    assert!(srv.requests("/sr.bin").last().unwrap().range.is_none());
 }
 
 #[tokio::test]
@@ -785,6 +851,36 @@ async fn assert_needs_restart(
     body: &[u8],
     dropped_at: u64,
 ) {
+    // No automatic retry happened: only the first request was made.
+    let kept = Kept {
+        saved: Some(dropped_at),
+        part_len: dropped_at,
+        requests: 1,
+    };
+    assert_kept_until_restart(srv, env, engine, id, path, body, kept).await;
+}
+
+/// What a download that needs a restart must still have.
+struct Kept {
+    /// Saved progress; `None` accepts any amount above zero.
+    saved: Option<u64>,
+    /// Length of the partial file on disk.
+    part_len: u64,
+    /// Requests made before the download stopped.
+    requests: usize,
+}
+
+/// The download stopped as "Can't resume" with its partial data intact,
+/// refuses to continue, and only an explicit restart downloads it again.
+async fn assert_kept_until_restart(
+    srv: &TestServer,
+    env: &Env,
+    engine: &fetchlane_engine::Engine,
+    id: &str,
+    path: &str,
+    body: &[u8],
+    kept: Kept,
+) {
     let failed = wait_status(engine, id, Status::Failed, 10).await;
     assert_eq!(
         failed.error.as_ref().unwrap().kind,
@@ -792,12 +888,14 @@ async fn assert_needs_restart(
         "{failed:?}"
     );
     assert!(!failed.resumable);
-    assert_eq!(failed.downloaded, dropped_at);
+    match kept.saved {
+        Some(n) => assert_eq!(failed.downloaded, n),
+        None => assert!(failed.downloaded > 0, "{failed:?}"),
+    }
     let parts = env.part_files();
     assert_eq!(parts.len(), 1, "partial data kept");
-    assert_eq!(std::fs::metadata(&parts[0]).unwrap().len(), dropped_at);
-    // No automatic retry happened.
-    assert_eq!(srv.requests(path).len(), 1);
+    assert_eq!(std::fs::metadata(&parts[0]).unwrap().len(), kept.part_len);
+    assert_eq!(srv.requests(path).len(), kept.requests);
 
     assert_eq!(engine.resume(id).unwrap_err().kind, ErrorKind::CannotResume);
     assert_eq!(

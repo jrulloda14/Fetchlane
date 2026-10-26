@@ -115,4 +115,12 @@ input:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
   background: var(--error-bg);
   color: var(--error);
 }
+.caveat {
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+.caveat p { margin: 4px 0 0; }
 .note { margin: 12px 0 0; color: var(--muted); font-size: 12px; line-height: 16px; }

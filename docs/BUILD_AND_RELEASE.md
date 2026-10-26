@@ -39,13 +39,13 @@ See [TESTING.md](TESTING.md) for what each suite covers.
 npm run desktop:build
 ```
 
-This produces a per-user installer (no admin rights needed) at `target/release/bundle/nsis/Fetchlane_<version>_x64-setup.exe`; the app itself is `target/release/fetchlane.exe`. The installer includes the browser extension (`browser-extension/` as a resource) and runs `src-tauri/windows/hooks.nsh`, which removes Fetchlane's per-user registry entries on uninstall.
+This produces a per-user installer (no admin rights needed) at `target/release/bundle/nsis/Fetchlane_<version>_x64-setup.exe`; the app itself is `target/release/fetchlane.exe`. The installer includes the browser extension (`browser-extension/` as a resource), `LICENSE`, `THIRD_PARTY_NOTICES.md` and `THIRD_PARTY_LICENSES.txt`, and runs `src-tauri/windows/hooks.nsh`, which removes Fetchlane's per-user registry entries on uninstall.
 
 A release build needs roughly 4 GB of free disk space for `target/`.
 
 ## Third-party notices
 
-When dependencies change, regenerate `THIRD_PARTY_NOTICES.md`:
+When dependencies change, regenerate `THIRD_PARTY_NOTICES.md` (the list) and `THIRD_PARTY_LICENSES.txt` (the license and notice texts shipped with those packages). Both, and `LICENSE`, are bundled with the installer:
 
 ```bash
 python scripts/third_party_notices.py

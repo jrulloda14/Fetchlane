@@ -79,9 +79,16 @@ person to confirm. See [IPC.md](IPC.md#outside-the-window).
    partial file must match the expected size, or the download restarts.
 4. Resume sends `Range` plus `If-Range` (a strong ETag or Last-Modified) and requires the
    `Content-Range` start, end and total to match exactly, along with unchanged validators.
-   - A `200` reply replaces the partial data from byte 0.
-   - Inconsistent ranges switch that download to a single connection without ranges.
-   - A changed resource restarts from zero, at most 3 times in a row.
+   - Anything else never overwrites saved progress. A `200` reply, a changed ETag or
+     Last-Modified, a different total, or a `Content-Range` that doesn't match stops the
+     download as **Can't resume** with the partial file and its saved layout kept. Only
+     **Restart** (confirmed by the user) deletes it. A segmented part file whose length
+     doesn't match is treated the same way, including after a crash.
+   - When ranges were unreliable, that's remembered across the restart, which then uses a
+     single connection without ranges.
+   - Within the first attempt of a new download, before any earlier progress exists, a
+     changed resource or unreliable ranges restart automatically from zero (at most 3
+     times in a row); only bytes from that same attempt are downloaded again.
 5. Finalizing claims the final name atomically (`create_new`, numbering on collision), then
    renames the partial file over that placeholder. Existing files are never overwritten.
 

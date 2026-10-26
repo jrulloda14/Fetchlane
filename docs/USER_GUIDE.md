@@ -32,6 +32,7 @@ The sidebar filters the list: **All downloads**, **Active**, **Queued**, **Seedi
 | Paused | Stopped by you; partial data is kept. |
 | Retrying in 8 s · 2 of 5 | The connection dropped; Fetchlane tries again by itself. |
 | Failed · reason | Needs you: the row shows the recovery action (Retry, Restart, Recheck files). |
+| Failed · Can't resume | The partial file can't be continued (the server can't resume, the file changed, or its ranges weren't reliable). The partial data is kept until you choose **Restart download…**, which says how much it discards and asks first. |
 | Completed | Done. Press <kbd>Enter</kbd> to open the file. |
 | Fetching details | A magnet link is getting its file list. |
 | Checking files | A torrent is verifying data already on disk. |
@@ -79,11 +80,14 @@ Three different actions, three different results:
 
 With the [browser extension](INSTALL.md#browser-extension-chrome-edge-brave) installed:
 
-- Downloads you start in Chrome, Edge or Brave open in Fetchlane's **Add download**, so you still choose the folder and confirm. If Fetchlane can't be reached, the browser keeps the download.
-- Right-click a link (including magnet links), video, audio file or image and choose **Download with Fetchlane**.
-- The extension's popup turns catching on or off, turns it off for the current site, and can leave small files to the browser.
+- Right-click a link (including magnet links), video, audio file or image and choose **Download with Fetchlane**. Fetchlane opens **Add download**, so you still choose the folder and confirm.
+- **Catch browser downloads** is off by default. Turn it on in the extension's popup to have downloads you start in Chrome, Edge or Brave open in Fetchlane instead. The popup can also turn catching off for the current site and leave small files to the browser.
 
-Fetchlane can't use your browser's sign-in, so turn catching off for sites whose downloads need you to be signed in.
+What catching can and can't do:
+
+- The browser stops its own download and hands **only the link** to Fetchlane. Your sign-in, cookies, form data and one-time tokens don't go with it, so downloads that need them can fail in Fetchlane. Turn catching off for those sites.
+- If you choose **Cancel** in Add download, nothing is downloaded: the browser's copy was already stopped. Start the download in the browser again.
+- If Fetchlane can't be reached, the extension asks the browser to download the link again. That's a new request, so it can fail for links that only work once.
 
 Links also reach Fetchlane from Windows: magnet links (if you turn that on in Settings), .torrent files opened with Fetchlane, and `fetchlane.exe --add <link>`. If several arrive at once, they wait and open one after another.
 

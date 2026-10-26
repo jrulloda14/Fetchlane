@@ -12,6 +12,7 @@ async function init() {
   const site = /^https?:/.test(tab?.url ?? "") ? hostOf(tab.url) : "";
 
   $("catch").checked = s.catchDownloads;
+  $("catchNote").hidden = !s.catchDownloads;
   $("minSize").value = String(s.minSizeMb);
   if (site) {
     $("siteRow").hidden = false;
@@ -23,6 +24,8 @@ async function init() {
   $("catch").addEventListener("change", async (e) => {
     await save({ catchDownloads: e.target.checked });
     $("siteCatch").disabled = !e.target.checked;
+    // Explain what catching can't carry over as soon as it's turned on.
+    $("catchNote").hidden = !e.target.checked;
   });
   $("siteCatch").addEventListener("change", async (e) => {
     const { skipHosts } = await getSettings();

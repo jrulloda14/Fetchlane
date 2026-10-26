@@ -1,5 +1,5 @@
 blank_issues_enabled: true
 contact_links:
   - name: Security vulnerability
-    url: https://github.com/jrulloda14/Fetchlane/security/advisories/new
-    about: Please report security issues privately.
+    url: https://github.com/jrulloda14/Fetchlane/blob/main/SECURITY.md
+    about: Please don't describe security issues in public; see how to report them privately.

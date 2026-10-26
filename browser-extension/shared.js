@@ -4,8 +4,12 @@
 export const HOST = "dev.fetchlane.host";
 
 export const DEFAULTS = {
-  /** Hand downloads started in the browser to Fetchlane. */
-  catchDownloads: true,
+  /**
+   * Hand downloads started in the browser to Fetchlane. Off until the person
+   * turns it on: only the link is handed over, so downloads that need the
+   * browser's sign-in or request can fail. A saved choice is always kept.
+   */
+  catchDownloads: false,
   /** Leave files smaller than this (MB) to the browser; 0 catches everything. */
   minSizeMb: 0,
   /** Sites whose downloads stay in the browser (host names). */

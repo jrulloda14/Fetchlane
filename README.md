@@ -4,7 +4,7 @@
 
 <p align="center"><strong>An Open-Source Download Manager for Windows</strong></p>
 
-<p align="center"><em>Your downloads, in order. Direct downloads and BitTorrent in one calm list, with files that arrive intact even after dropped connections, pauses, crashes and misbehaving servers.</em></p>
+<p align="center"><em>Your downloads, in order. Direct downloads and BitTorrent in one calm list, built to keep files intact through dropped connections, pauses, crashes and misbehaving servers.</em></p>
 
 <div align="center">
 
@@ -25,18 +25,18 @@
 
 **Fetchlane** is a free, open-source desktop download manager. Paste a link, a magnet link or a .torrent file, or send downloads from your browser, and Fetchlane keeps them in order: queued, resumed safely, retried when the connection drops, and never overwriting a file you already have.
 
-**Welcome to the v0.1.0 preview!** Windows 10 and 11 are ready to try. Feedback shapes what comes next.
+**Early preview (v0.1.0).** Windows 10 and 11 only, the installer isn't code-signed yet, and some features have so far only been checked by hand on one PC ([what's verified](docs/PROJECT_STATUS.md#whats-verified)). Feedback shapes what comes next.
 
 <p align="center"><img src="docs/assets/fetchlane-downloads.png" width="760" alt="Fetchlane: direct downloads and torrents in one list, with progress, speeds, retries and seeding"></p>
 
 ## What it does
 
 - **Download anything in one list.** Direct http/https links and BitTorrent (magnet links and .torrent files) side by side, each with a quiet Direct or Torrent tag, live progress, speed and time left.
-- **Resume safely.** Fetchlane only continues a partial file when the server proves it's the same file. If it can't, it says so and keeps your data until you decide. Crashes and restarts pick up from the last confirmed byte.
+- **Resume safely.** Fetchlane only continues a partial file when the server proves it's the same file. If it can't, or the file changed, it says so and keeps the partial data until you choose **Restart**. After a crash or restart, resumable downloads pick up from the last byte saved to disk.
 - **Ride out bad connections.** Automatic retries with a visible countdown ("Retrying in 8 s · 2 of 5"), optional multi-connection downloads, and plain-language errors that say what to do next.
 - **Keep a queue.** Choose how many downloads run at once, reorder by dragging, **Start now** to skip the line, or **Pause all**.
 - **Torrents done right.** See a torrent's contents before downloading and pick the files you want. Fetching magnet details can be cancelled, stalled torrents say they're waiting for peers, progress is saved between runs, and seeding stops at the ratio or time you set.
-- **Send downloads from your browser.** The extension for Chrome, Edge and Brave hands your downloads to Fetchlane, and **Download with Fetchlane** sits on the right-click menu. You always confirm the folder in Fetchlane.
+- **Send downloads from your browser.** With the extension for Chrome, Edge and Brave, right-click a link and choose **Download with Fetchlane**. You can also turn on catching browser downloads (off by default); only the link is handed over, so downloads that need your sign-in may not work. You always confirm in Fetchlane.
 - **Know when it's done.** A notification from Fetchlane with the name, size and folder, plus **Open** and **Show in folder** buttons.
 - **Delete only on purpose.** **Stop seeding**, **Remove from list** and **Delete downloaded files** are separate actions, and deleting shows exactly which files go to the Recycle Bin.
 
