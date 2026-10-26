@@ -1,4 +1,8 @@
-# <img src="assets/fetchlane/logos/fetchlane-mark-light.svg" width="44" align="top" alt=""> Fetchlane: An Open-Source Download Manager for Windows
+<p align="center"><img src="assets/fetchlane/logos/fetchlane-mark-light.svg" width="72" alt=""></p>
+
+<h1 align="center">Fetchlane</h1>
+
+<p align="center"><strong>An Open-Source Download Manager for Windows</strong></p>
 
 > Your downloads, in order. Direct downloads and BitTorrent in one calm list, with files that arrive intact even after dropped connections, pauses, crashes and misbehaving servers.
 
