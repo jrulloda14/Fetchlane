@@ -24,3 +24,4 @@ See the [changelog](https://github.com/{{REPO}}/blob/{{TAG}}/CHANGELOG.md).
 - Links from your browser or Windows always open **Add download** for you to confirm.
 - Verify your download with `SHA256SUMS.txt` below.
 - Found a problem? [Report it](https://github.com/{{REPO}}/issues/new/choose).
+- Fetchlane is free. If it helps you, you can [buy me a coffee](https://buymeacoffee.com/longitude) ☕

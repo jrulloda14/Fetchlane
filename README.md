@@ -4,7 +4,9 @@
 
 <p align="center"><strong>An Open-Source Download Manager for Windows</strong></p>
 
-> Your downloads, in order. Direct downloads and BitTorrent in one calm list, with files that arrive intact even after dropped connections, pauses, crashes and misbehaving servers.
+<p align="center"><em>Your downloads, in order. Direct downloads and BitTorrent in one calm list, with files that arrive intact even after dropped connections, pauses, crashes and misbehaving servers.</em></p>
+
+<div align="center">
 
 [![Download](https://img.shields.io/badge/Download-v0.1.0-0d7f75)](https://github.com/jrulloda14/Fetchlane/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-e8b923)](LICENSE)
@@ -17,6 +19,9 @@
 [![Rust](https://img.shields.io/badge/Rust-stable-B7410E?logo=rust&logoColor=white)](https://www.rust-lang.org)
 [![TypeScript](https://img.shields.io/badge/TypeScript-7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
 [![User guide](https://img.shields.io/badge/Docs-User%20guide-5b5bd6)](docs/USER_GUIDE.md)
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a-coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/longitude)
+
+</div>
 
 **Fetchlane** is a free, open-source desktop download manager. Paste a link, a magnet link or a .torrent file, or send downloads from your browser, and Fetchlane keeps them in order: queued, resumed safely, retried when the connection drops, and never overwriting a file you already have.
 
@@ -88,6 +93,10 @@ Built with [Tauri 2](https://tauri.app), Rust and TypeScript. Torrents use [libr
 | [Build and release](docs/BUILD_AND_RELEASE.md) | Prerequisites, checks, installer, releasing |
 | [Design system](assets/fetchlane/design-system/README.md) | Brand, tokens, states, layout and interaction rules |
 | [Security policy](SECURITY.md) | What Fetchlane can touch, and how to report a vulnerability |
+
+## Support
+
+Fetchlane is free and open source. If it saves you a broken download or two, you can [buy me a coffee](https://buymeacoffee.com/longitude) ☕. Feedback and bug reports help just as much.
 
 ## License
 
