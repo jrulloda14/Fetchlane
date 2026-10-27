@@ -20,7 +20,8 @@ See the [changelog](https://github.com/{{REPO}}/blob/{{TAG}}/CHANGELOG.md).
 
 ## Good to know
 
-- No account and no telemetry. Fetchlane only connects to the servers and peers of the downloads you add.
+- Early preview: built for Windows 10 and 11, tested on Windows 10 so far. See [project status](https://github.com/{{REPO}}/blob/{{TAG}}/docs/PROJECT_STATUS.md) for what's verified and known limitations.
+- No account and no telemetry. Fetchlane only connects to the servers of the downloads you add and, for torrents, to trackers, the DHT network and peers.
 - Links from your browser or Windows always open **Add download** for you to confirm.
 - Verify your download with `SHA256SUMS.txt` below.
 - Found a problem? [Report it](https://github.com/{{REPO}}/issues/new/choose).
