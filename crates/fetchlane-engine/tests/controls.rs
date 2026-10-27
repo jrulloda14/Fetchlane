@@ -221,7 +221,7 @@ async fn start_now_runs_beyond_the_limit() {
     assert_eq!(env.read("b"), body_b);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread")]
 async fn pause_is_refused_when_progress_would_be_lost() {
     let srv = TestServer::start().await;
     let body = pattern(MB, 9);
@@ -230,7 +230,12 @@ async fn pause_is_refused_when_progress_would_be_lost() {
         r.throttle = Some((8 * 1024, Duration::from_millis(5)))
     });
     let env = Env::new();
-    let engine = env.engine(1, 3).await;
+    // This test is about pausing, not timeouts: a slow CI runner must not
+    // turn a throttled (but steady) transfer into "the server stopped
+    // responding", which can't be retried without ranges.
+    let mut cfg = env.with_fake_bin(test_config());
+    cfg.read_timeout = Duration::from_secs(10);
+    let engine = env.engine_with(cfg, 1, 3).await;
     let id = add(&engine, srv.url("/n"));
     let v = wait_for(&engine, &id, 5, |v| v.downloaded > 50_000).await;
     assert!(!v.can_pause);
