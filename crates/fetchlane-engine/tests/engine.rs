@@ -681,11 +681,25 @@ async fn segmented_pause_restart_and_resume() {
         engine.shutdown().await;
     }
     let engine = env.engine(4, 3).await;
+    // Everything written before the pause was checkpointed and saved.
+    let saved = engine.get(&id).unwrap().downloaded;
+    assert!(saved > 400_000, "saved progress after restart: {saved}");
+    let before = srv.requests("/sp.bin").len();
     engine.resume(&id).unwrap();
     wait_status(&engine, &id, Status::Completed, 30).await;
     assert_eq!(env.read("sp.bin"), body);
-    // Resumed segments only fetched what was missing.
-    assert!(srv.bytes_sent("/sp.bin") < body.len() as u64 + 4 * 64 * 1024);
+    // Resumed segments asked for exactly the missing bytes. (Counting bytes
+    // the server wrote would also count data left unread in socket buffers
+    // at the pause, which depends on the machine.)
+    let requested: u64 = srv.requests("/sp.bin")[before..]
+        .iter()
+        .map(|l| {
+            let r = l.range.as_deref().expect("resume uses ranges");
+            let (a, b) = r.strip_prefix("bytes=").unwrap().split_once('-').unwrap();
+            b.parse::<u64>().unwrap() - a.parse::<u64>().unwrap() + 1
+        })
+        .sum();
+    assert_eq!(requested, body.len() as u64 - saved);
 }
 
 #[tokio::test]
