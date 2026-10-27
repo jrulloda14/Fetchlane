@@ -27,7 +27,7 @@
 
 > **Early preview (v0.1.1).** Built for Windows 10 and 11 (64-bit); so far tested on Windows 10 only, by hand on one PC ([what's verified](docs/PROJECT_STATUS.md#whats-verified)). The installer isn't code-signed yet. Expect rough edges, and please [report what you find](https://github.com/jrulloda14/Fetchlane/issues/new/choose).
 
-<p align="center"><img src="docs/assets/fetchlane-downloads.png" width="760" alt="Fetchlane: direct downloads and torrents in one list, with progress, speeds, retries and seeding"></p>
+<p align="center"><img src="docs/assets/social/fetchlane-demo.gif" width="720" alt="Fetchlane demo: downloads and torrents in one list, picking a torrent's files before it starts, and pausing and resuming a download"></p>
 
 ## What it does
 

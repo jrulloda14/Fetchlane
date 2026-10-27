@@ -189,6 +189,8 @@ function start(d: DownloadView) {
 }
 
 const probes = new Map<string, { cancelled: boolean }>();
+/** Names of .torrent files read by probe_torrent, so the added torrent keeps them. */
+const probeNames = new Map<string, string>();
 
 function setState(d: DownloadView, state: TorrentState) {
   d.torrent!.state = state;
@@ -230,6 +232,7 @@ function torrentCommand(cmd: string, a: Record<string, unknown>): { handled: boo
       const pid = String(a.probeId);
       if (src.type === "file") {
         const name = src.value.split(/[\\/]/).pop()!.replace(/\.torrent$/i, "");
+        probeNames.set(pid, name);
         return { handled: true, value: Promise.resolve({ ...previewOf(name, SAMPLE_FILES), probeId: pid }) };
       }
       const probe = { cancelled: false };
@@ -253,7 +256,7 @@ function torrentCommand(cmd: string, a: Record<string, unknown>): { handled: boo
     case "add_torrent": {
       const r = a.request as { probeId?: string; magnet?: string; destDir?: string; selected?: number[]; startPaused?: boolean };
       const files = SAMPLE_FILES;
-      const nd = tor(r.magnet ? "Magnet download" : "New torrent", r.magnet ? "fetching" : r.startPaused ? "paused" : "connecting", files,
+      const nd = tor(r.magnet ? "Magnet download" : (r.probeId && probeNames.get(r.probeId)) || "New torrent", r.magnet ? "fetching" : r.startPaused ? "paused" : "connecting", files,
         { createdAt: Date.now(), destDir: r.destDir ?? settings.downloadDir, canPause: true }, { selected: r.selected });
       items.push(nd);
       if (!r.magnet && !r.startPaused) setTimeout(() => { setState(nd, "downloading"); changed(); }, 1500);
