@@ -1379,7 +1379,7 @@ dependencies = [
 
 [[package]]
 name = "fetchlane"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "fetchlane-engine",
  "serde",
@@ -1400,7 +1400,7 @@ dependencies = [
 
 [[package]]
 name = "fetchlane-engine"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bytes",
  "dirs 6.0.0",

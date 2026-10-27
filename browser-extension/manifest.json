@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Fetchlane",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Send downloads and magnet links from your browser to the Fetchlane download manager.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjoylqcLpyP479llklfBQf2nSq3D1HXQhTJzaau5iMClIQChCda+dbW72xsbUqEbAaVxtigyyBqs5MVcsyLdjSeqc3OdeNHjomzrS6MVR2I7KvJelxINVL/sOa2AeBKAevxz2xrhZhGGLqPafhPt478QE8ZizU1HYoA0lLyOcf4EuoFknb7lEerukWI7+QmxXT2O1MFuwu4IVtZnEZ8U21vPgEo4yRvMHHwK/C28bvOPBK0MyfyUC94ue5katMTk7gf/Fzeic3cHdURjE7RYlkr8hYu2itqgDfexfnIUwTPo1nERVtXpUzTVTvIt2d7IftCcwq1aqxl0b4NvI4S+pzQIDAQAB",
   "minimum_chrome_version": "116",

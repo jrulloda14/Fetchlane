@@ -1,8 +1,12 @@
 # Project status
 
-Fetchlane is an **early preview** (v0.1). Windows 10 and 11 are the target platforms; so far
-it has been run by hand on one Windows 10 Pro PC. The engine is portable Rust, but macOS
-and Linux builds haven't been tried.
+Fetchlane is an **early preview** (v0.1.1).
+
+| Platform | Status |
+| --- | --- |
+| Windows 10 (64-bit) | Supported and tested (one Windows 10 Pro PC) |
+| Windows 11 (64-bit) | Supported, not yet tested |
+| macOS, Linux | Not supported; the engine is portable Rust, but no builds have been tried |
 
 ## What's verified
 
@@ -10,32 +14,41 @@ and Linux builds haven't been tried.
 
 | Area | Tests |
 | --- | --- |
-| Direct downloads: resume with validators, changed files, broken or ignored ranges (partial data kept until Restart), segments, retries, crash recovery, naming | 48 engine integration tests against a local misbehaving HTTP server, plus 21 unit tests ([TESTING.md](TESTING.md)) |
+| Direct downloads: resume with validators, changed files, broken or ignored ranges (partial data kept until Restart), segments, retries, crash recovery, naming, transfers that keep going while saves are slow | 49 engine integration tests against a local misbehaving HTTP server, plus 21 unit tests ([TESTING.md](TESTING.md)) |
 | Torrents: single and multi-file, selection, pause/resume, limits, recheck, fast resume, magnet details, deletion, .torrent links | 12 tests with local librqbit seeders (no internet) |
 | Native messaging framing, link filtering, notification text | 8 unit tests in `src-tauri` |
 | UI model, and the browser extension's capture decisions (off by default, saved choices kept, handoff failure) | 22 Vitest tests |
 
-### Checked by hand during development (October 2026, one Windows 10 Pro PC)
+### Installed package (0.1.1 installer, October 27, 2026, Windows 10 Pro, per-user install from an unelevated session of an administrator account)
+
+Checked on the developer's PC, not a clean machine:
+
+- Silent install for the current user without admin rights; the install folder contains `LICENSE`, `THIRD_PARTY_NOTICES.md`, `THIRD_PARTY_LICENSES.txt` and the browser extension, and no development files.
+- Direct download, pause (partial file kept) and resume with a validated range request; the file is byte-exact.
+- A second download of the same name is saved as `small (1).bin`; neither file is overwritten.
+- Killing the app mid-download: after restart the download continued from the saved byte (517,500) and finished byte-exact.
+- Settings and the download list survive a restart.
+- A .torrent file's contents preview, starting it with one of two files selected, and stopping it. Downloading from real peers wasn't checked in the installed app.
+- A link with a user name, password and token: the list, the window and the log only show it redacted.
+- The bundled extension in a fresh Edge profile: catching is off, a browser download stays in the browser, the popup connects to the installed app and shows the limits when catching is turned on.
+- Silent uninstall: removes the notification identity, the native messaging host keys, the .torrent "Open with" entry, the program folder and the Start menu shortcut; downloaded files and the app's data folder are kept.
+
+### Checked by hand during development (October 2026, same PC)
 
 | Area | What was checked |
 | --- | --- |
-| Desktop app wiring | Driven through WebView2's DevTools protocol: adding direct downloads and torrents, the delete confirmation scope, cancelling a magnet fetch |
 | Second launch | `fetchlane.exe --add <link>` and opening a .torrent file reach the running window; a second arrival waits its turn |
-| Browser extension | Loaded unpacked in Microsoft Edge: native messaging ping, catching a download, the browser getting the link back when Fetchlane is unreachable |
+| Browser extension | Catching a download (when turned on), and the browser getting the link back when Fetchlane is unreachable |
 | Notifications | Read back from the Windows notification database: sent as "Fetchlane", with name, size, folder and buttons |
-
-### Release review (October 26, 2026)
-
-- Windows CI passed on GitHub for the commit the v0.1.0 tag points to.
-- The automated suites above were run locally after this review's fixes.
-- Version 0.1.0 matches in `package.json`, `src-tauri/tauri.conf.json`, `Cargo.toml` and `browser-extension/manifest.json`.
 
 ### Not yet verified
 
-- Installing, upgrading over an older version, and uninstalling (including removal of the registry entries) on a clean machine
+- Any of the above on a clean machine or under a separate standard (non-administrator) account
+- Upgrading from an earlier version (0.1.1 is the first public release)
+- Removing the magnet link handler on uninstall (it was off during the check)
 - A long real-world torrent download and upload in the installed app
 - Chrome and Brave (only Edge was tested)
-- Clicking a notification's buttons (the buttons are sent; handling the click was only exercised through the same event the app uses)
+- Clicking a notification's buttons
 - Windows 11
 
 ## Known limitations

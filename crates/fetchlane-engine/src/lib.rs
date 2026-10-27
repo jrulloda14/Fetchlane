@@ -86,6 +86,10 @@ pub struct EngineConfig {
     pub shutdown_grace: Duration,
     pub trash: Trasher,
     pub torrent: TorrentConfig,
+    /// Tests only: extra time each save of the download list takes, as on a
+    /// slow disk or one held by antivirus software.
+    #[doc(hidden)]
+    pub simulated_save_delay: Duration,
 }
 
 impl Default for EngineConfig {
@@ -106,6 +110,7 @@ impl Default for EngineConfig {
             shutdown_grace: Duration::from_secs(5),
             trash: Trasher::default(),
             torrent: TorrentConfig::default(),
+            simulated_save_delay: Duration::ZERO,
         }
     }
 }

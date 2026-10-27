@@ -1,6 +1,6 @@
 # Installing Fetchlane
 
-Download the latest installer from the **[Releases page](https://github.com/jrulloda14/Fetchlane/releases/latest)**. Each release lists SHA-256 checksums in `SHA256SUMS.txt` so you can confirm your download is intact. You can also [build the installer yourself](BUILD_AND_RELEASE.md).
+Download the installer from the **[Releases page](https://github.com/jrulloda14/Fetchlane/releases)**. Each release lists SHA-256 checksums in `SHA256SUMS.txt` so you can confirm your download is intact. You can also [build the installer yourself](BUILD_AND_RELEASE.md).
 
 Fetchlane isn't code-signed yet, so Windows warns that the app comes from an unidentified developer the first time you open it. The steps below use the standard, built-in way to allow it. You never need to turn off a security feature.
 
@@ -13,7 +13,7 @@ Fetchlane isn't code-signed yet, so Windows warns that the app comes from an uni
 
 The first time a torrent starts, Windows Firewall may ask whether Fetchlane can accept incoming connections. Allowing it on private networks helps torrents find more peers. Torrents still work if you decline.
 
-**Updating:** download the newer installer and run it. Your download list, torrents and settings live in your user profile, which the installer doesn't touch. (Upgrading from one release to the next hasn't been tested yet, since 0.1.0 is the first.)
+**Updating:** download the newer installer and run it. Your download list, torrents and settings live in your user profile, which the installer doesn't touch. (Upgrading from one release to the next hasn't been tested yet, since 0.1.1 is the first public release.)
 
 **Uninstalling:** go to **Settings → Apps → Installed apps**, find **Fetchlane** and choose **Uninstall**. Downloaded files are never touched. The uninstaller is set up to remove Fetchlane's registry entries (browser extension host, notification identity, Open with, and the magnet link handler if you turned it on); this hasn't been verified on a clean machine yet, see [project status](PROJECT_STATUS.md#not-yet-verified). Your list and settings stay in `%APPDATA%\dev.fetchlane.desktop` in case you reinstall; delete that folder, and `%LOCALAPPDATA%\dev.fetchlane.desktop`, if you want them gone too.
 

@@ -1007,7 +1007,7 @@ impl Engine {
                 break;
             }
         }
-        inner.persist_now();
+        inner.persist_off_thread().await;
         inner.torrents.shutdown().await;
         inner.closed.store(true, Ordering::SeqCst);
         inner.persist_wake.notify_one();
@@ -1209,9 +1209,15 @@ impl Inner {
         self.persist_wake.notify_one();
     }
 
+    /// Save the download list now. This writes and fsyncs a file, so async
+    /// code must use [`Inner::persist_off_thread`] instead: blocking a runtime
+    /// thread stalls every transfer on it and can make reads time out.
     pub fn persist_now(&self) {
         if self.closed.load(Ordering::SeqCst) {
             return;
+        }
+        if !self.cfg.simulated_save_delay.is_zero() {
+            std::thread::sleep(self.cfg.simulated_save_delay);
         }
         let result = self.store.save_downloads_with(|| {
             let st = lock(&self.state);
@@ -1227,6 +1233,14 @@ impl Inner {
         });
         if let Err(e) = result {
             tracing::error!("couldn't save the download list: {e}");
+        }
+    }
+
+    /// [`Inner::persist_now`] on the blocking pool; returns once it's saved.
+    pub async fn persist_off_thread(self: &Arc<Self>) {
+        let inner = self.clone();
+        if let Err(e) = tokio::task::spawn_blocking(move || inner.persist_now()).await {
+            tracing::error!("saving the download list failed: {e}");
         }
     }
 
@@ -1260,7 +1274,7 @@ impl Inner {
                     break;
                 }
                 tokio::time::sleep(inner.cfg.persist_debounce).await;
-                inner.persist_now();
+                inner.persist_off_thread().await;
             }
         });
     }
@@ -1337,6 +1351,7 @@ impl Inner {
                 };
                 inner.track_worker(&id, false);
                 inner.on_exit(&id, &live, outcome);
+                inner.persist_off_thread().await;
             });
         }
         self.persist_soon();
@@ -1427,7 +1442,6 @@ impl Inner {
         if let Some(p) = delete {
             remove_part(&p);
         }
-        self.persist_now();
         self.notify_changed();
         self.workers_done.notify_waiters();
         self.schedule();

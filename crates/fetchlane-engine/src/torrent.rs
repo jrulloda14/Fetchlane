@@ -150,6 +150,9 @@ pub(crate) struct Torrents {
     changed: broadcast::Sender<()>,
     trash: Trasher,
     closed: AtomicBool,
+    /// Numbers each save; the file is only written by the newest one.
+    save_seq: std::sync::atomic::AtomicU64,
+    saved_seq: Arc<Mutex<u64>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -249,6 +252,8 @@ impl Torrents {
             changed,
             trash,
             closed: AtomicBool::new(false),
+            save_seq: std::sync::atomic::AtomicU64::new(0),
+            saved_seq: Arc::new(Mutex::new(0)),
         })
     }
 
@@ -272,23 +277,56 @@ impl Torrents {
         self.dir.join(format!("{id}.torrent"))
     }
 
+    /// Save the torrent list. Inside the async runtime the file is written
+    /// on the blocking pool, so a slow disk doesn't stall transfers; a save
+    /// that finishes after a newer one is skipped.
     pub fn persist(&self) {
         if self.closed.load(Ordering::SeqCst) {
             return;
         }
+        if let Some(write) = self.prepare_save() {
+            match tokio::runtime::Handle::try_current() {
+                Ok(rt) => drop(rt.spawn_blocking(write)),
+                Err(_) => write(),
+            }
+        }
+    }
+
+    /// Save now and wait for it (shutdown).
+    async fn persist_and_wait(&self) {
+        if let Some(write) = self.prepare_save() {
+            if let Err(e) = tokio::task::spawn_blocking(write).await {
+                tracing::error!("saving the torrent list failed: {e}");
+            }
+        }
+    }
+
+    fn prepare_save(&self) -> Option<impl FnOnce() + Send + 'static> {
         let records: Vec<TorrentRecord> = lock(&self.st)
             .entries
             .iter()
             .map(|e| e.rec.clone())
             .collect();
-        match serde_json::to_vec_pretty(&records) {
-            Ok(bytes) => {
-                if let Err(e) = store::write_atomic(&self.state_dir.join(RECORDS_FILE), &bytes) {
-                    tracing::error!("couldn't save the torrent list: {e}");
-                }
+        let bytes = match serde_json::to_vec_pretty(&records) {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::error!("couldn't serialize the torrent list: {e}");
+                return None;
             }
-            Err(e) => tracing::error!("couldn't serialize the torrent list: {e}"),
-        }
+        };
+        let seq = self.save_seq.fetch_add(1, Ordering::SeqCst) + 1;
+        let saved = self.saved_seq.clone();
+        let path = self.state_dir.join(RECORDS_FILE);
+        Some(move || {
+            let mut last = lock(&saved);
+            if *last > seq {
+                return;
+            }
+            if let Err(e) = store::write_atomic(&path, &bytes) {
+                tracing::error!("couldn't save the torrent list: {e}");
+            }
+            *last = seq;
+        })
     }
 
     /// The librqbit session, started on first use so Fetchlane opens no
@@ -1656,7 +1694,7 @@ impl Torrents {
     pub async fn shutdown(&self) {
         // Count uploads made since the last tick before saving.
         self.tick().await;
-        self.persist();
+        self.persist_and_wait().await;
         self.closed.store(true, Ordering::SeqCst);
         if let Some(s) = self.session.get() {
             s.stop().await;

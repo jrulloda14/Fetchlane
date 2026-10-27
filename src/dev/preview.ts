@@ -440,7 +440,7 @@ function handle(cmd: string, a: Record<string, unknown>): unknown {
       integration.magnetHandler = !!a.enabled;
       return integration;
     case "plugin:app|version":
-      return "0.1.0-preview";
+      return "0.1.1-preview";
     case "plugin:clipboard-manager|read_text":
       return "https://download.kdenlive.org/stable/25.08.2/kdenlive-25.08.2.exe";
     case "plugin:dialog|open": {

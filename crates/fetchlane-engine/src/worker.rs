@@ -236,10 +236,11 @@ impl Ctx {
     }
 
     /// Publish and write to disk before any new data is written, so stale
-    /// metadata can never describe new bytes after a crash.
-    fn commit(&self, job: &Job) {
+    /// metadata can never describe new bytes after a crash. The save runs on
+    /// the blocking pool so a slow disk can't stall other transfers.
+    async fn commit(&self, job: &Job) {
         self.publish(job);
-        self.inner.persist_now();
+        self.inner.persist_off_thread().await;
     }
 
     async fn send(
@@ -371,7 +372,7 @@ pub(crate) async fn run(
                     tracing::info!(id = %ctx.id, "file changed on the server; restarting from the beginning");
                 }
                 job.reset();
-                ctx.commit(&job);
+                ctx.commit(&job).await;
             }
             Halt::Fail(err) => {
                 if job.plan.checkpointed() > before {
@@ -543,7 +544,7 @@ async fn resume_single(ctx: &Ctx, job: &mut Job) -> Result<(), Halt> {
     if have == 0 {
         // The partial file is gone; nothing is lost by starting over.
         job.reset();
-        ctx.commit(job);
+        ctx.commit(job).await;
         return fresh(ctx, job).await;
     }
     if have == total {
@@ -636,7 +637,7 @@ async fn open_single(part: &Path, offset: u64) -> io::Result<File> {
 /// Stream `resp` sequentially into the partial file starting at `offset`.
 async fn single_stream(ctx: &Ctx, job: &mut Job, resp: Response, offset: u64) -> Result<(), Halt> {
     job.plan = Arc::new(Plan::single(offset));
-    ctx.commit(job);
+    ctx.commit(job).await;
     let file = open_single(&job.part, offset).await.map_err(io_fail)?;
     ctx.live.bytes.store(offset, Ordering::SeqCst);
     let _conn = ConnGuard::new(&ctx.live);
@@ -691,7 +692,7 @@ async fn segmented_fresh(ctx: &Ctx, job: &mut Job, first: Response, n: usize) ->
         f.sync_all().await.map_err(io_fail)?;
     }
     job.plan = Arc::new(Plan::segmented(&split_ranges(total, n)));
-    ctx.commit(job);
+    ctx.commit(job).await;
     tracing::info!(id = %ctx.id, segments = n, "downloading with multiple connections");
     run_segments(ctx, job, Some(first)).await
 }
@@ -703,7 +704,7 @@ async fn resume_segmented(ctx: &Ctx, job: &mut Job) -> Result<(), Halt> {
             return Err(partial_mismatch());
         }
         job.reset();
-        ctx.commit(job);
+        ctx.commit(job).await;
         return fresh(ctx, job).await;
     }
     run_segments(ctx, job, None).await

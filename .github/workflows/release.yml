@@ -1,5 +1,5 @@
 name: Release (draft)
-# Pushing a tag such as v0.1.0 builds the Windows installer and attaches it,
+# Pushing a tag such as v0.1.1 builds the Windows installer and attaches it,
 # with SHA256SUMS.txt, to a DRAFT release. Publishing stays a manual step on
 # GitHub. Builds are unsigned until signing credentials are configured.
 on:

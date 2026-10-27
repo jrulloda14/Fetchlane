@@ -221,7 +221,7 @@ async fn start_now_runs_beyond_the_limit() {
     assert_eq!(env.read("b"), body_b);
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test]
 async fn pause_is_refused_when_progress_would_be_lost() {
     let srv = TestServer::start().await;
     let body = pattern(MB, 9);
@@ -230,12 +230,7 @@ async fn pause_is_refused_when_progress_would_be_lost() {
         r.throttle = Some((8 * 1024, Duration::from_millis(5)))
     });
     let env = Env::new();
-    // This test is about pausing, not timeouts: a slow CI runner must not
-    // turn a throttled (but steady) transfer into "the server stopped
-    // responding", which can't be retried without ranges.
-    let mut cfg = env.with_fake_bin(test_config());
-    cfg.read_timeout = Duration::from_secs(10);
-    let engine = env.engine_with(cfg, 1, 3).await;
+    let engine = env.engine(1, 3).await;
     let id = add(&engine, srv.url("/n"));
     let v = wait_for(&engine, &id, 5, |v| v.downloaded > 50_000).await;
     assert!(!v.can_pause);
@@ -246,6 +241,30 @@ async fn pause_is_refused_when_progress_would_be_lost() {
     assert_eq!(engine.get(&id).unwrap().status, Status::Downloading);
     wait_status(&engine, &id, Status::Completed, 20).await;
     assert_eq!(env.read("n"), body);
+}
+
+#[tokio::test]
+async fn slow_disk_saves_dont_stall_transfers() {
+    // Saving the download list takes longer than the read timeout, as on a
+    // slow or antivirus-scanned disk. Saves must not stall the transfer:
+    // this download can't resume, so a spurious "server stopped responding"
+    // would end it as "Can't resume".
+    let srv = TestServer::start().await;
+    let body = pattern(MB / 2, 10);
+    srv.file(
+        "/sd",
+        Resource::new(body.clone()).ranges(RangeMode::Ignored),
+    );
+    srv.configure("/sd", |r| {
+        r.throttle = Some((8 * 1024, Duration::from_millis(5)))
+    });
+    let env = Env::new();
+    let mut cfg = env.with_fake_bin(test_config());
+    cfg.simulated_save_delay = Duration::from_millis(1_200);
+    let engine = env.engine_with(cfg, 1, 3).await;
+    let id = add(&engine, srv.url("/sd"));
+    let done = wait_status(&engine, &id, Status::Completed, 30).await;
+    assert_eq!(env.read(&done.file_name), body);
 }
 
 #[tokio::test]

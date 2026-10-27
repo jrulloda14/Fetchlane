@@ -54,7 +54,7 @@ python scripts/third_party_notices.py
 ## Releasing
 
 1. Update the version in `package.json`, `src-tauri/tauri.conf.json`, `Cargo.toml` (workspace) and `browser-extension/manifest.json`, and add the release to [CHANGELOG.md](../CHANGELOG.md).
-2. Commit, then tag and push: `git tag v0.1.0 && git push origin v0.1.0`.
+2. Commit, then tag and push: `git tag v0.1.1 && git push origin v0.1.1`. Never move or reuse a tag that already has a release; bump the version instead.
 3. The **Release (draft)** workflow checks that the tag matches the app version, runs the tests, builds the Windows installer and attaches it and `SHA256SUMS.txt` to a **draft** release, using [`.github/release-notes.md`](../.github/release-notes.md) as the description.
 4. Review the draft on GitHub and publish it.
 

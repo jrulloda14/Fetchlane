@@ -8,7 +8,7 @@
 
 <div align="center">
 
-[![Download](https://img.shields.io/badge/Download-v0.1.0-0d7f75)](https://github.com/jrulloda14/Fetchlane/releases/latest)
+[![Releases](https://img.shields.io/badge/Preview-v0.1.1-0d7f75)](https://github.com/jrulloda14/Fetchlane/releases)
 [![License](https://img.shields.io/badge/License-MIT-e8b923)](LICENSE)
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D6?logo=windows&logoColor=white)](docs/INSTALL.md#windows-10-and-11)
 [![Windows CI](https://github.com/jrulloda14/Fetchlane/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/jrulloda14/Fetchlane/actions/workflows/windows-ci.yml)
@@ -25,7 +25,7 @@
 
 **Fetchlane** is a free, open-source desktop download manager. Paste a link, a magnet link or a .torrent file, or send downloads from your browser, and Fetchlane keeps them in order: queued, resumed safely, retried when the connection drops, and never overwriting a file you already have.
 
-**Early preview (v0.1.0).** Windows 10 and 11 only, the installer isn't code-signed yet, and some features have so far only been checked by hand on one PC ([what's verified](docs/PROJECT_STATUS.md#whats-verified)). Feedback shapes what comes next.
+> **Early preview (v0.1.1).** Built for Windows 10 and 11 (64-bit); so far tested on Windows 10 only, by hand on one PC ([what's verified](docs/PROJECT_STATUS.md#whats-verified)). The installer isn't code-signed yet. Expect rough edges, and please [report what you find](https://github.com/jrulloda14/Fetchlane/issues/new/choose).
 
 <p align="center"><img src="docs/assets/fetchlane-downloads.png" width="760" alt="Fetchlane: direct downloads and torrents in one list, with progress, speeds, retries and seeding"></p>
 
@@ -40,17 +40,24 @@
 - **Know when it's done.** A notification from Fetchlane with the name, size and folder, plus **Open** and **Show in folder** buttons.
 - **Delete only on purpose.** **Stop seeding**, **Remove from list** and **Delete downloaded files** are separate actions, and deleting shows exactly which files go to the Recycle Bin.
 
-**Private by design:** no account, no sign-up and no telemetry. Fetchlane only connects to the servers and peers of the downloads you add.
+**Private by design:** no account, no sign-up and no telemetry. Fetchlane only connects to the servers of the downloads you add and, for torrents, to trackers, the DHT network and peers.
 
 ## Download
 
-Get the latest version from the **[Releases page](https://github.com/jrulloda14/Fetchlane/releases/latest)**.
+Installers are on the **[Releases page](https://github.com/jrulloda14/Fetchlane/releases)**, with SHA-256 checksums in `SHA256SUMS.txt`.
 
 | Platform | File | Notes |
 | --- | --- | --- |
-| Windows 10 / 11 (64-bit) | `Fetchlane_<version>_x64-setup.exe` | Installs for your user account; no admin rights needed. Includes the browser extension. |
+| Windows 10 / 11 (64-bit) | `Fetchlane_<version>_x64-setup.exe` | Installs for your user account; no admin rights needed. Includes the browser extension. Tested on Windows 10 so far. |
 
 Fetchlane isn't code-signed yet, so Windows will show a warning the first time you open it. The **[installation guide](docs/INSTALL.md)** walks through it step by step, including the browser extension.
+
+### Good to know before you install
+
+- **Unsigned installer:** Windows SmartScreen warns the first time; the [installation guide](docs/INSTALL.md) shows how to continue.
+- **Browser downloads that need your sign-in:** the extension only hands Fetchlane the link, never your cookies, so downloads behind a login can fail in Fetchlane. Catching browser downloads is off by default.
+- **Torrents upload while seeding:** after a torrent finishes, Fetchlane keeps sharing it until a share ratio of 1.0 by default; change or turn off the limits in Settings, or choose **Stop seeding**. Windows Firewall may ask about incoming connections.
+- **All limitations:** [project status](docs/PROJECT_STATUS.md#known-limitations).
 
 ## Using Fetchlane
 

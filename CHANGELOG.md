@@ -2,7 +2,9 @@
 
 All notable changes are listed here. Versions follow [Semantic Versioning](https://semver.org).
 
-## [0.1.0] - First preview
+## [0.1.1] - First public preview
+
+0.1.0 was built as a draft release and never published; 0.1.1 replaces it. Compared with that draft, partial downloads are kept until you confirm a restart, catching browser downloads is opt-in, license texts ship with the installer, and a slow disk can no longer stall downloads.
 
 ### Features
 - **Direct downloads:** HTTP and HTTPS with validated resume (`If-Range` and exact `Content-Range`); when a partial file can't be continued, it's kept until you confirm a restart; automatic retries with a visible countdown, optional segmented downloads, crash recovery that only trusts fsync'd data, safe file names that never overwrite existing files, and redacted links.
@@ -24,4 +26,4 @@ All notable changes are listed here. Versions follow [Semantic Versioning](https
 - The browser extension is installed with **Load unpacked** until it's in the browser stores.
 - See [project status](docs/PROJECT_STATUS.md#known-limitations) for the full list.
 
-[0.1.0]: https://github.com/jrulloda14/Fetchlane/releases/tag/v0.1.0
+[0.1.1]: https://github.com/jrulloda14/Fetchlane/releases/tag/v0.1.1
